@@ -1,12 +1,15 @@
-// Native unit tests for ToneEngine — the 9-step grey -> brown tone ladder.
+// Native unit tests for ToneEngine — the 9-step tone ladder.
 //
-// Ladder (plan "Sound engine", user Q1): 0 grey, 1-2 grey/brown blends,
-// 3 brown, 4-8 brown with a second low-pass moving down (2 k, 1 k, 500,
-// 300, 180 Hz). Step 6 (500 Hz) is today's "deep brown" and the default.
+// Ladder v2 (user, desk test 2026-11-13): the old darkest rung ("deepest
+// brown", brown + a 180 Hz low-pass) sounded best, so it is now the MIDDLE
+// step (4), with four lighter and four darker rungs: second low-pass at
+// 1000, 640, 400, 260, [180], 125, 90, 65, 45 Hz. Grey left the ladder but
+// stays available as a custom rung (for a future "tone family" key).
 // Properties under test:
 //   - every step plays at the same RMS (no loudness jump between steps);
-//   - every step is measurably darker than the one before;
-//   - grey follows inverse A-weighting (bass boost capped below ~25 Hz);
+//   - every step is measurably darker than the one before (spectral
+//     centroid at least 8% lower per step);
+//   - grey (custom rung) follows inverse A-weighting (bass capped ~25 Hz);
 //   - a step change crossfades at constant power (equal-power gains);
 //   - deterministic for a seed; clipping vanishingly rare.
 
@@ -39,13 +42,22 @@ double rmsOf(ToneEngine& e, size_t frames) {
     return std::sqrt(sum / (2.0 * frames));
 }
 
-// Brightness: treble (1-8 kHz) relative to mids (100 Hz-1 kHz), in dB.
-// Mids rather than bass, because grey's capped sub-bass boost would
-// otherwise dominate the comparison without being what ears call "bright".
-double brightness(int step) {
+// Spectral centroid (power-weighted mean frequency, 20 Hz-8 kHz). Once the
+// second corner drops below ~100 Hz a treble/mid ratio stops moving, but the
+// centroid keeps falling, so it is the darkness measure. 16k-point FFT for
+// enough resolution at the bottom of the range.
+double centroid(int step) {
     ToneEngine e(step, 77);
-    const auto p = spectrum::psd(e, 120);
-    return db(bandMean(p, 1000, 8000) / bandMean(p, 100, 1000));
+    const auto p = spectrum::psd(e, 60, 16384);
+    const double df = spectrum::kFs / 16384.0;
+    double num = 0, den = 0;
+    for (size_t k = 1; k < p.size(); ++k) {
+        const double f = k * df;
+        if (f < 20.0 || f > 8000.0) continue;
+        num += f * p[k];
+        den += p[k];
+    }
+    return num / den;
 }
 
 // Analog target for grey: inverse A-weighting with A's four DC zeros replaced
@@ -69,11 +81,10 @@ double greyTargetBand(double f0, double f1) {
 
 static void test_ladder_shape_and_names() {
     TEST_ASSERT_EQUAL(9, kToneSteps);
-    TEST_ASSERT_EQUAL(6, kDefaultTone);
-    TEST_ASSERT_EQUAL_STRING("grey", toneName(0));
-    TEST_ASSERT_EQUAL_STRING("brown", toneName(3));
-    TEST_ASSERT_EQUAL_STRING("deep brown", toneName(6));
-    TEST_ASSERT_EQUAL_STRING("deepest brown", toneName(8));
+    TEST_ASSERT_EQUAL(4, kDefaultTone);
+    TEST_ASSERT_EQUAL_STRING("lightest", toneName(0));
+    TEST_ASSERT_EQUAL_STRING("middle", toneName(4));
+    TEST_ASSERT_EQUAL_STRING("darkest", toneName(8));
 }
 
 static void test_step_is_clamped() {
@@ -93,16 +104,23 @@ static void test_every_step_plays_at_the_target_rms() {
 }
 
 static void test_each_step_is_darker_than_the_last() {
-    double prev = brightness(0);
+    double prev = centroid(0);
     for (int s = 1; s < kToneSteps; ++s) {
-        const double b = brightness(s);
-        TEST_ASSERT_TRUE_MESSAGE(b < prev - 1.0, toneName(s));  // >= 1 dB darker per step
-        prev = b;
+        const double c = centroid(s);
+        TEST_ASSERT_TRUE_MESSAGE(c < 0.92 * prev, toneName(s));  // >= 8% lower per step
+        prev = c;
     }
 }
 
+static void test_middle_step_is_the_old_favourite() {
+    // The rung the user liked best on 2026-11-13: brown + 180 Hz low-pass,
+    // centroid ~117 Hz (analytic). Guards against the ladder drifting.
+    const double c = centroid(kDefaultTone);
+    TEST_ASSERT_FLOAT_WITHIN(12.0, 117.0, c);
+}
+
 static void test_grey_follows_inverse_a_weighting() {
-    ToneEngine e(0, 9);
+    ToneEngine e(kGreyRung, 9);
     const auto p = spectrum::psd(e, 300);
     const double ref = bandMean(p, 900, 1100) / greyTargetBand(900, 1100);
     for (double f : {63.0, 125.0, 250.0, 500.0, 2000.0, 4000.0}) {
@@ -112,11 +130,17 @@ static void test_grey_follows_inverse_a_weighting() {
     }
 }
 
-static void test_brown_step_matches_noise_synth_brown_slope() {
-    ToneEngine e(3, 11);
+static void test_plain_brown_rung_matches_noise_synth_brown_slope() {
+    ToneEngine e(kBrownRung, 11);
     const auto p = spectrum::psd(e, 200);
     const double slope = db(bandMean(p, 2000, 4000) / bandMean(p, 1000, 2000));
     TEST_ASSERT_FLOAT_WITHIN(0.7, -6.02, slope);
+}
+
+static void test_custom_rungs_play_at_the_target_rms() {
+    ToneEngine g(kGreyRung, 21), b(kBrownRung, 22);
+    TEST_ASSERT_FLOAT_WITHIN(0.05 * kToneTargetRms, kToneTargetRms, rmsOf(g, 20 * 44100));
+    TEST_ASSERT_FLOAT_WITHIN(0.05 * kToneTargetRms, kToneTargetRms, rmsOf(b, 20 * 44100));
 }
 
 static void test_crossfade_gains_are_equal_power_and_monotonic() {
@@ -141,9 +165,9 @@ static void test_crossfade_completes_and_level_holds() {
     double sum = 0;
     const int seeds = 8;
     for (int s = 0; s < seeds; ++s) {
-        ToneEngine e(6, 100 + s);
+        ToneEngine e(kDefaultTone, 100 + s);
         rmsOf(e, 44100);
-        e.setStep(0);  // the biggest jump on the ladder
+        e.setStep(0);  // a big jump on the ladder
         TEST_ASSERT_TRUE(e.crossfading());
         sum += rmsOf(e, kToneCrossfadeFrames);
         TEST_ASSERT_FALSE(e.crossfading());
@@ -160,7 +184,7 @@ static void test_same_seed_is_deterministic() {
 }
 
 static void test_bounded_and_clipping_vanishingly_rare() {
-    for (int s : {0, 3, 8}) {
+    for (int s : {0, 4, 8}) {
         ToneEngine e(s, 3);
         std::vector<float> buf(4096 * 2);
         const size_t frames = 300 * 44100;  // 5 minutes
@@ -181,7 +205,9 @@ int main(int, char**) {
     RUN_TEST(test_every_step_plays_at_the_target_rms);
     RUN_TEST(test_each_step_is_darker_than_the_last);
     RUN_TEST(test_grey_follows_inverse_a_weighting);
-    RUN_TEST(test_brown_step_matches_noise_synth_brown_slope);
+    RUN_TEST(test_middle_step_is_the_old_favourite);
+    RUN_TEST(test_plain_brown_rung_matches_noise_synth_brown_slope);
+    RUN_TEST(test_custom_rungs_play_at_the_target_rms);
     RUN_TEST(test_crossfade_gains_are_equal_power_and_monotonic);
     RUN_TEST(test_crossfade_completes_and_level_holds);
     RUN_TEST(test_same_seed_is_deterministic);

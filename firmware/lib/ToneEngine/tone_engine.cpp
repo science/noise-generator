@@ -23,21 +23,19 @@ constexpr int kGreyPoles = 4;  // sections 0..3 carry a pole, 4..5 are zero-only
 
 // --- brown family ------------------------------------------------------------
 constexpr double kBrownHz = 140.0;
-// Second low-pass per step; 0 = none (brown / grey steps).
-constexpr double kLp2Hz[kToneSteps] = {0, 0, 0, 0, 2000, 1000, 500, 300, 180};
-// Share of power from grey, per step (the rest is brown). Solved numerically
-// (2026-11-13) so steps 0-3 are evenly spaced in brightness (treble 1-8 kHz
-// vs mids 100 Hz-1 kHz: -7.8, -10.9, -14.0, -17.1 dB). Grey's power is mostly
-// deep bass, so a little brown adds a lot of mids; hence the high shares.
-constexpr double kGreyShare[kToneSteps] = {1.0, 0.9295, 0.7441, 0, 0, 0, 0, 0, 0};
+
+// Ladder v2: second low-pass corner per step (see tone_engine.h). Spacing
+// checked analytically: centroid 225, 193, 162, 136, 117, 101, 88, 77, 67 Hz.
+constexpr double kLadderLp2Hz[kToneSteps] = {1000, 640, 400, 260, 180, 125, 90, 65, 45};
+
+// Grey/brown blend shares that were evenly spaced on ladder v1 (kept for a
+// future grey family): 1.0, 0.9295, 0.7441, 0.
 
 struct Coeffs {
     float gz[kGreySections], gp;  // grey zeros / pole
     float greyGain;               // normalises grey to kToneTargetRms
-    float a1;                     // brown integrator pole
-    float a2[kToneSteps];         // second low-pass pole per step
-    float brownGain[kToneSteps];  // normalises each brown variant
-    float mixGrey[kToneSteps], mixBrown[kToneSteps];  // amplitude weights
+    double a1;                    // brown integrator pole
+    float a1f;
 };
 
 double onePoleVar(double a) { return 1.0 / (1.0 - a * a); }
@@ -81,24 +79,8 @@ const Coeffs& coeffs() {
     const double p = poleFor(kGreyPoleHz);
     c.gp = static_cast<float>(p);
     c.greyGain = static_cast<float>(kToneTargetRms / sqrt(kWhiteVar * greyVar(z, p)));
-    const double a1 = poleFor(kBrownHz);
-    c.a1 = static_cast<float>(a1);
-    for (int i = 0; i < kToneSteps; ++i) {
-        double var;
-        if (kLp2Hz[i] > 0) {
-            const double a2 = poleFor(kLp2Hz[i]);
-            c.a2[i] = static_cast<float>(a2);
-            var = twoPoleVar(a1, a2);
-        } else {
-            c.a2[i] = 0.0f;
-            var = onePoleVar(a1);
-        }
-        c.brownGain[i] = static_cast<float>(kToneTargetRms / sqrt(kWhiteVar * var));
-        // Independent grey and brown sources add in power, so amplitude
-        // weights are square roots of the power shares; total RMS is unchanged.
-        c.mixGrey[i] = static_cast<float>(sqrt(kGreyShare[i]));
-        c.mixBrown[i] = static_cast<float>(sqrt(1.0 - kGreyShare[i]));
-    }
+    c.a1 = poleFor(kBrownHz);
+    c.a1f = static_cast<float>(c.a1);
     ready = true;
     return c;
 }
@@ -123,10 +105,13 @@ constexpr int kPrerollFrames = 4096;  // settle a new voice's filters before it 
 
 }  // namespace
 
+const ToneRung kGreyRung{1.0f, 0.0f};
+const ToneRung kBrownRung{0.0f, 0.0f};
+
 const char* toneName(int step) {
     static const char* const names[kToneSteps] = {
-        "grey", "grey-brown", "brown-grey", "brown", "soft brown",
-        "warm brown", "deep brown", "deeper brown", "deepest brown"};
+        "lightest", "lighter", "light", "slightly light", "middle",
+        "slightly dark", "dark", "darker", "darkest"};
     if (step < 0 || step >= kToneSteps) return "?";
     return names[step];
 }
@@ -144,13 +129,33 @@ void crossfadeGains(uint32_t pos, uint32_t len, float& outGain, float& inGain) {
 
 static int clampStep(int s) { return s < 0 ? 0 : (s >= kToneSteps ? kToneSteps - 1 : s); }
 
+static ToneRung ladderRung(int step) { return ToneRung{0.0f, static_cast<float>(kLadderLp2Hz[step])}; }
+
 ToneEngine::ToneEngine(int step, uint32_t seed)
     : requested_(clampStep(step)), seedCounter_(static_cast<uint64_t>(seed) << 20) {
-    startVoice(voices_[cur_], requested_);
+    startVoice(voices_[cur_], requested_, ladderRung(requested_));
 }
 
-void ToneEngine::startVoice(Voice& v, int step) {
+ToneEngine::ToneEngine(const ToneRung& custom, uint32_t seed)
+    : requested_(-1), seedCounter_(static_cast<uint64_t>(seed) << 20) {
+    startVoice(voices_[cur_], -1, custom);
+}
+
+void ToneEngine::startVoice(Voice& v, int step, const ToneRung& rung) {
+    const Coeffs& k = coeffs();
     v.step = step;
+    // Normalise each part to the target RMS; independent grey and brown
+    // sources add in power, so the weights are square roots of the shares.
+    double brownVar = onePoleVar(k.a1);
+    v.mix.a2 = 0.0f;
+    if (rung.lp2Hz > 0) {
+        const double a2 = poleFor(rung.lp2Hz);
+        v.mix.a2 = static_cast<float>(a2);
+        brownVar = twoPoleVar(k.a1, a2);
+    }
+    const double share = rung.greyShare < 0 ? 0 : (rung.greyShare > 1 ? 1 : rung.greyShare);
+    v.mix.grey = static_cast<float>(sqrt(share)) * k.greyGain;
+    v.mix.brown = static_cast<float>(sqrt(1.0 - share) * kToneTargetRms / sqrt(kWhiteVar * brownVar));
     for (Channel& c : v.ch) {
         c = Channel();
         c.rngGrey = splitmix64(++seedCounter_) | 1;
@@ -164,9 +169,8 @@ void ToneEngine::startVoice(Voice& v, int step) {
 
 float ToneEngine::next(Voice& v, Channel& c) {
     const Coeffs& k = coeffs();
-    const int s = v.step;
     float out = 0.0f;
-    if (k.mixGrey[s] > 0.0f) {
+    if (v.mix.grey > 0.0f) {
         float x = white(c.rngGrey);
         for (int i = 0; i < kGreySections; ++i) {
             const float y = x - k.gz[i] * c.gx[i] + (i < kGreyPoles ? k.gp * c.gy[i] : 0.0f);
@@ -174,23 +178,23 @@ float ToneEngine::next(Voice& v, Channel& c) {
             c.gy[i] = y;
             x = y;
         }
-        out += k.mixGrey[s] * k.greyGain * x;
+        out += v.mix.grey * x;
     }
-    if (k.mixBrown[s] > 0.0f) {
-        c.s0 = k.a1 * c.s0 + white(c.rngBrown);
+    if (v.mix.brown > 0.0f) {
+        c.s0 = k.a1f * c.s0 + white(c.rngBrown);
         float b = c.s0;
-        if (k.a2[s] > 0.0f) {
-            c.s1 = k.a2[s] * c.s1 + (1.0f - k.a2[s]) * c.s0;
+        if (v.mix.a2 > 0.0f) {
+            c.s1 = v.mix.a2 * c.s1 + (1.0f - v.mix.a2) * c.s0;
             b = c.s1;
         }
-        out += k.mixBrown[s] * k.brownGain[s] * b;
+        out += v.mix.brown * b;
     }
     return out;
 }
 
 void ToneEngine::beginFade(int step) {
     Voice& incoming = voices_[1 - cur_];
-    startVoice(incoming, step);
+    startVoice(incoming, step, ladderRung(step));
     fading_ = true;
     fadePos_ = 0;
 }

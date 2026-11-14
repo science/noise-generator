@@ -11,8 +11,12 @@
 //     so the speaker stays awake (Q9). Reconnect retries never give up.
 //   - Wi-Fi is on-demand (Q7): at boot to set the clock, and once a day at
 //     15:00 for a resync while quiet. In the daytime, boot opens a 10-minute
-//     OTA window before Bluetooth starts; KEY1 ends it early and starts the
-//     noise (user F8). At night, boot skips the window: noise first.
+//     OTA window; KEY1 ends it early and starts the noise (user F8). At
+//     night, boot skips the window: noise first.
+//   - Bluetooth starts right after the clock sync, DURING the OTA window
+//     (v0.2.0). The library waits 10 s before its first connect, so starting
+//     Bluetooth only after the window made KEY1 feel dead for ~15 s and
+//     invited a second, toggling press (desk test 2026-11-13).
 //   - OTA rollback: a new image marks itself valid only after 60 s of
 //     healthy running; a crash before that rolls back to the previous image.
 //
@@ -47,7 +51,7 @@
 #error "OTA_PASSWORD missing: see firmware/.env.example"
 #endif
 
-#define FIRMWARE_VERSION "0.1.2"
+#define FIRMWARE_VERSION "0.2.0"
 
 namespace {
 
@@ -238,7 +242,9 @@ void resyncClock() {
 // --- settings ----------------------------------------------------------------
 void loadSettings() {
     prefs.begin("noisegen", false);
-    wantTone.store(constrain(prefs.getInt("tone", kDefaultTone), 0, kToneSteps - 1));
+    // "tone2": ladder v2 (re-centred). The v1 key "tone" indexed a different
+    // ladder, so it is deliberately not read: everyone starts mid-ladder.
+    wantTone.store(constrain(prefs.getInt("tone2", kDefaultTone), 0, kToneSteps - 1));
     wantVolume.store(constrain(prefs.getInt("volume", kDefaultVolume), 0, kCeiling));
     Serial.printf("[settings] tone %d (%s), volume %d%%\n", wantTone.load(),
                   toneName(wantTone.load()), wantVolume.load());
@@ -246,7 +252,7 @@ void loadSettings() {
 
 void saveSettingsIfDue() {
     if (!settingsDirty || millis() - lastSettingChange < kSaveDelayMs) return;
-    prefs.putInt("tone", wantTone.load());
+    prefs.putInt("tone2", wantTone.load());
     prefs.putInt("volume", wantVolume.load());
     settingsDirty = false;
     Serial.printf("[settings] saved tone %d, volume %d%%\n", wantTone.load(), wantVolume.load());
@@ -342,8 +348,10 @@ bool runOtaWindow() {
         markValidIfDue();
         if (millis() - lastNote > 60000) {
             lastNote = millis();
-            Serial.printf("[ota] window: %lu min left\n",
-                          (unsigned long)((kOtaWindowMs - (millis() - t0)) / 60000 + 1));
+            Serial.printf("[ota] window: %lu min left | link=%s | heap %u KB (min %u)\n",
+                          (unsigned long)((kOtaWindowMs - (millis() - t0)) / 60000 + 1),
+                          linkUp.load() ? "up" : "down", ESP.getFreeHeap() >> 10,
+                          ESP.getMinFreeHeap() >> 10);
         }
         delay(5);
     }
@@ -410,18 +418,27 @@ void setup() {
                                  : Controller::kAssumeNightUntilClockKnown;
     if (!timeKnown) Serial.println("[boot] clock unknown: assuming night (fail toward noise)");
 
-    bool startPressed = false;
-    if (wifi && timeKnown && !night) startPressed = runOtaWindow();
-    else if (wifi) Serial.println("[boot] night window: skipping OTA window, noise first");
-    if (wifi) wifiOff();
     lastResyncDay = timeKnown ? yday : -1;
 
-    // 2. Controller, then Bluetooth.
+    // 2. Controller and Bluetooth: the speaker link comes up while the OTA
+    //    window (if any) is open, so KEY1 gets sound within ~5 s.
     controller = new Controller(night, millis());
-    if (startPressed) controller->pressStartStop(millis());
     wantPlaying.store(controller->shouldPlay());
-    Serial.printf("[boot] state: %s\n", controller->stateName());
+    Serial.printf("[boot] state: %s | heap before Bluetooth %u KB\n", controller->stateName(),
+                  ESP.getFreeHeap() >> 10);
     startBluetooth();
+    Serial.printf("[boot] Bluetooth started | heap %u KB\n", ESP.getFreeHeap() >> 10);
+
+    // 3. Daytime: OTA window. KEY1 closes it and counts as START.
+    if (wifi && timeKnown && !night) {
+        if (runOtaWindow()) {
+            controller->pressStartStop(millis());
+            Serial.printf("[key] start/stop -> %s\n", controller->stateName());
+        }
+    } else if (wifi) {
+        Serial.println("[boot] night window: no OTA window, noise first");
+    }
+    if (wifi) wifiOff();
 }
 
 void loop() {
