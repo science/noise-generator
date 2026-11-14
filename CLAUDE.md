@@ -49,6 +49,14 @@ Public repo `science/noise-generator`, Apache-2.0.
   OTA push verified on the bench. **Opening the serial port resets the
   board, and a reset within 60 s of an OTA rolls it back**
   (`docs/runbooks/flash.md`).
+- 2026-11-13 ~20:55: **v0.2.1 flashed for the bedroom R2000DB and handed over
+  to go live tonight; the Pixel 3 is retired** (the user keeps it as a manual
+  fallback). Ladder v2 is centred on the user's favourite (brown + 180 Hz).
+  Wi-Fi and Bluetooth never run together: v0.2.0 measured 37 KB free heap
+  (min 17 KB) with both, too close to a crash. Not yet verified on-device:
+  the night-boot path, the KEY1 lockout, and the 15:00 quiet restart. The
+  first night is the first real soak. Ask the user how it went before
+  changing anything.
 
 ## Toolchain — always through the wrappers
 
