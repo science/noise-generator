@@ -328,7 +328,7 @@ Today's "deep brown" is the default, in the middle of the dark half. White
 and pink are removed from the controls. Does that shape sound right? Do you
 want more or fewer steps?
 
-> Your answer:
+> Your answer: 9 steps seems fine. Selection of step should be firmware stored and survive reboots, so whatever is chosen "sticks" unless the firmware is fully reset. (Ideally OTA updates don't destroy this config file - not sure if that's possible but it seems like it should be?)
 
 **Q2. Button map.** Proposal:
 
@@ -342,7 +342,8 @@ want more or fewer steps?
 Any changes? Is there something you'd rather have on KEY4? For example:
 "off in 30 minutes", "louder for tonight only", or nothing.
 
-> Your answer:
+> Your answer: I don't need KEY4. KEY1 start would have an auto-timeout at 2 hours, except where the system is programmed to perform on the nightly schedule (9pm to 9am). 
+
 
 **Q3. Play/stop and nap behaviour.** Proposal:
 
@@ -355,20 +356,28 @@ Any changes? Is there something you'd rather have on KEY4? For example:
 Is that what you want? In particular: should a night-time stop last until
 tomorrow night, or just for a while (e.g. 30 min) before resuming?
 
-> Your answer:
+> Your answer: With KEY4 deleted from functionality, here's my proposed scheduled behavior:
+State cases:
+1. Inside 9pm-9am autoplay window:
+  1. KEY1 pressed (STOP): noise generator stops until next autoplay window start event
+  2. KEY1 pressed (START): noise generator resumes playing, per its regularly scheduled window behavior
+2. Outside 9pm-9am autoplay window:
+  1. KEY pressed (STOP): noise generator stops until next autoplay window start event
+  2. KEY pressed (START): noise generator starts playing for 2 hours
+3. If START press (2 hour noise duration) outside autoplay window extends past the autoplay window start, then State Case #1 takes over and noise generation continues until autoplay window exits. In short State Case #1 should have precedence authority over State Case 2. 
 
 **Q4. The schedule.** Is it 21:00–09:00 every day, or different on weekends?
 Which timezone (e.g. America/Los_Angeles)? Fade-in at the start (proposed
 30 s) and fade-out at the end (proposed 60 s): OK?
 
-> Your answer:
+> Your answer: US/Pacific (LA/America) TZ. 9pm to 9am is the autoplay window. Fade in/out should be 5 second ramp (both for autoplay and button press)
 
 **Q5. Volume at the start of each night.** Should it always start at a fixed
 default you set, or at whatever level it was last left at? And what maximum
 should the ceiling be, as a rough fraction of the R2000DB's comfortable
 level? This can be set by ear during the bedroom trial.
 
-> Your answer:
+> Your answer: Volume level should be persisted as durably as possible, just like noise tone selection (ideally surving reboots and OTA updates)
 
 **Q6. Home Assistant.** What should HA be able to see or do? Pick a level
 (or describe your own):
@@ -378,14 +387,14 @@ level? This can be set by ear during the bedroom trial.
 - (c) also start, stop and nap;
 - (d) also change the schedule, volume and tone.
 
-> Your answer:
+> Your answer: Maybe nothing for now? I had imagined we'd use it for OTA updates and getting alerts/logs for device health or stuff like that, which is why I suggested it join the HA network as a device. But I don't need it to be controlled from HA. 
 
 **Q7. Wi-Fi strategy.** Always-on Wi-Fi (needed for live HA control, if the
 overnight soak passes)? Or on-demand Wi-Fi (boot + a daily afternoon window
 for time sync and updates; no live control, no coexistence risk)? If you
 picked (a) or (b) in Q6, on-demand is probably enough.
 
-> Your answer:
+> Your answer: I think on-demand Wifi is fine. Similar to the ~/dev/sleep-monitor project -- maybe use wifi to send logs/state periodically to HA, plus time sync (if not NTP directly). Oh, it might be nice if vacation mode could block the noise generator and unblock when I get back. That's bonus but would make sense and also be fine with "phone home every 3 hours" type HA interaction, and no HA interation is needed while noise is being streamed to b/t speakers, if that will disrupt the sound at all.
 
 **Q8. OTA style.** Push from bambam (you or Claude run a command, the device
 installs it)? Or pull (the device checks a URL daily and installs anything
@@ -393,7 +402,7 @@ newer, for example from this repo's GitHub releases)? Push is simpler and
 more deliberate. Pull works even when you aren't at a computer, but needs a
 release step.
 
-> Your answer:
+> Your answer: Push is fine for now. This is hopefully a rare event that we push updates after the first few shakeout period
 
 **Q9. What "off" means for the speaker.** During the day, should the ESP32
 keep the Bluetooth link up and stream silence? Then the R2000DB stays on all
@@ -402,18 +411,18 @@ is to drop the link and let the R2000DB go to standby. Then it must wake when
 the ESP32 reconnects at night, and we'd have to test that it reliably does.
 What does the Pixel do today: is the speaker on all day?
 
-> Your answer:
+> Your answer: The pixel maintains b/t contact at all times. And I think that might be important b/c the edifier might, iirc, switch to opt or aux input if the b/t stays disconnected for too long. I'm not sure if pixel 3 is sending empty noise or just hanging onto the b/t link (assuming there's a difference: my b/t stack knowledge is fuzzy at this layer)
 
 **Q10. Bedroom trial timing.** Phase 2 needs a daytime session in the
 bedroom: Pixel Bluetooth off, ESP32 paired with the R2000DB, a few minutes
 of noise at low volume. When works for you? Should the Pixel then stay
 unpaired, or go back to normal until cutover?
 
-> Your answer:
+> Your answer: We can probably make this all work tonight before I go to bed, and then pixel 3 retires tonight and we try this system then.
 
 **Q11. Bench test notes.** Did you hear any clicks when switching noise type,
 or when stepping the volume? Did KEY1's fade-out/fade-in sound smooth? In
 your Bluetooth off/on test, did you toggle the speaker twice? The log shows
 a second disconnect at 18:56:24 that took about 2 minutes to recover.
 
-> Your answer:
+> Your answer: No clicks at all - all sounds were clean: vol up/down, fade in/out, noise tone switch were all excellent. Regarding bench test: yes, I switched off b/t for a short period and the system reconnected, then I switched off for a long period (2 min) and when I turned it back on, the device reconnected well after only 5 second delay. 
