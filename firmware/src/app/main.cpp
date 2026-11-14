@@ -13,10 +13,16 @@
 //     15:00 for a resync while quiet. In the daytime, boot opens a 10-minute
 //     OTA window; KEY1 ends it early and starts the noise (user F8). At
 //     night, boot skips the window: noise first.
-//   - Bluetooth starts right after the clock sync, DURING the OTA window
-//     (v0.2.0). The library waits 10 s before its first connect, so starting
-//     Bluetooth only after the window made KEY1 feel dead for ~15 s and
-//     invited a second, toggling press (desk test 2026-11-13).
+//   - Wi-Fi and Bluetooth never run at the same time. v0.2.0 tried starting
+//     Bluetooth during the OTA window: free heap fell to 37 KB (min 17 KB),
+//     too close to a crash. So the window runs first, then Bluetooth. The
+//     library waits 10 s before its first connect, so after KEY1 closes the
+//     window, further KEY1 presses are ignored until sound starts (max 30 s);
+//     otherwise an impatient second press toggled it straight back off.
+//   - Daily clock resync = a quiet software restart at 15:00 when nothing is
+//     playing: it syncs NTP and goes straight to Bluetooth (no OTA window;
+//     only RST / power-on opens the window). Same if the clock is unknown:
+//     retry by restart every 30 min while idle.
 //   - OTA rollback: a new image marks itself valid only after 60 s of
 //     healthy running; a crash before that rolls back to the previous image.
 //
@@ -29,6 +35,7 @@
 #include <Preferences.h>
 #include <WiFi.h>
 #include <esp_ota_ops.h>
+#include <esp_system.h>
 #include <time.h>
 
 #include <atomic>
@@ -51,7 +58,7 @@
 #error "OTA_PASSWORD missing: see firmware/.env.example"
 #endif
 
-#define FIRMWARE_VERSION "0.2.0"
+#define FIRMWARE_VERSION "0.2.1"
 
 namespace {
 
@@ -64,7 +71,8 @@ constexpr uint32_t kFadeFrames = 5 * 44100;            // 5 s (user Q4)
 constexpr uint32_t kOtaWindowMs = 10UL * 60UL * 1000UL;  // 10 min (user F8)
 constexpr uint32_t kSaveDelayMs = 3000;                // batch NVS writes
 constexpr uint32_t kMarkValidAfterMs = 60000;
-constexpr int kResyncHour = 15;                        // daily clock resync, if quiet
+constexpr int kResyncHour = 15;                        // daily restart for clock resync, if quiet
+constexpr uint32_t kKey1LockoutMs = 30000;             // after KEY1 closes the window
 const Window kNight{21 * 60, 9 * 60};
 
 struct Key {
@@ -101,6 +109,7 @@ bool settingsDirty = false;
 uint32_t lastSettingChange = 0;
 bool markedValid = false;
 int lastResyncDay = -1;
+uint32_t key1LockedUntil = 0;  // ignore KEY1 until sound starts or this time
 
 // --- audio -----------------------------------------------------------------
 int32_t fillFrames(Frame* frames, int32_t count) {
@@ -231,12 +240,14 @@ bool syncClock(uint32_t timeoutMs) {
     return false;
 }
 
-// Brief Wi-Fi session while Bluetooth runs (daily resync / retry).
-void resyncClock() {
-    Serial.println("[time] resync: Wi-Fi on briefly");
-    if (wifiConnect(10000)) syncClock(10000);
-    wifiOff();
-    if (clockValid()) timeKnown = true;
+// Restart quietly to resync the clock (Wi-Fi and Bluetooth must not share
+// the heap). Only called while nothing is playing. Settings are saved first.
+void restartForResync(const char* why) {
+    Serial.printf("[time] %s: quiet restart to resync the clock\n", why);
+    prefs.putInt("tone2", wantTone.load());
+    prefs.putInt("volume", wantVolume.load());
+    delay(200);
+    ESP.restart();
 }
 
 // --- settings ----------------------------------------------------------------
@@ -420,33 +431,42 @@ void setup() {
 
     lastResyncDay = timeKnown ? yday : -1;
 
-    // 2. Controller and Bluetooth: the speaker link comes up while the OTA
-    //    window (if any) is open, so KEY1 gets sound within ~5 s.
+    // 2. Daytime power-on / RST: OTA window first (Wi-Fi only). A software
+    //    restart (the daily resync) skips it. KEY1 closes it = START.
+    const esp_reset_reason_t reason = esp_reset_reason();
+    const bool softRestart = reason == ESP_RST_SW;
+    bool startPressed = false;
+    if (wifi && timeKnown && !night && !softRestart) startPressed = runOtaWindow();
+    else if (wifi && night) Serial.println("[boot] night window: no OTA window, noise first");
+    else if (wifi && softRestart) Serial.println("[boot] software restart: no OTA window");
+    if (wifi) wifiOff();
+
+    // 3. Controller, then Bluetooth.
     controller = new Controller(night, millis());
+    if (startPressed) {
+        controller->pressStartStop(millis());
+        key1LockedUntil = millis() + kKey1LockoutMs;
+        Serial.println("[key] start/stop -> daytime run (2 h); KEY1 locked until sound starts");
+    }
     wantPlaying.store(controller->shouldPlay());
     Serial.printf("[boot] state: %s | heap before Bluetooth %u KB\n", controller->stateName(),
                   ESP.getFreeHeap() >> 10);
     startBluetooth();
-    Serial.printf("[boot] Bluetooth started | heap %u KB\n", ESP.getFreeHeap() >> 10);
-
-    // 3. Daytime: OTA window. KEY1 closes it and counts as START.
-    if (wifi && timeKnown && !night) {
-        if (runOtaWindow()) {
-            controller->pressStartStop(millis());
-            Serial.printf("[key] start/stop -> %s\n", controller->stateName());
-        }
-    } else if (wifi) {
-        Serial.println("[boot] night window: no OTA window, noise first");
-    }
-    if (wifi) wifiOff();
 }
 
 void loop() {
     static uint32_t lastSecond = 0, lastStatus = 0, lastRetry = 0;
     const uint32_t now = millis();
 
+    // KEY1 lockout ends once sound is actually flowing (link up and playing)
+    // or after kKey1LockoutMs, whichever comes first.
+    if (key1LockedUntil && (int32_t)(now - key1LockedUntil) >= 0) key1LockedUntil = 0;
+    if (key1LockedUntil && linkUp.load() && playingNow) key1LockedUntil = 0;
+
     const int key = pollKeys();
-    if (key == 1) {
+    if (key == 1 && key1LockedUntil) {
+        Serial.println("[key] start/stop ignored: still connecting to the speaker");
+    } else if (key == 1) {
         controller->pressStartStop(now);
         Serial.printf("[key] start/stop -> %s\n", controller->stateName());
     } else if (key) {
@@ -465,19 +485,14 @@ void loop() {
             }
             // Daily resync at 15:00 while quiet (Wi-Fi briefly shares the radio
             // with an idle, silent Bluetooth link).
-            if (hour == kResyncHour && yday != lastResyncDay && !controller->shouldPlay()) {
+            if (hour == kResyncHour && yday != lastResyncDay && !controller->shouldPlay() &&
+                gain.silent() && now > 10UL * 60UL * 1000UL) {
                 lastResyncDay = yday;
-                resyncClock();
+                restartForResync("daily 15:00");
             }
         } else if (now - lastRetry > 30UL * 60UL * 1000UL) {
-            lastRetry = now;  // clock never synced: retry every 30 min
-            resyncClock();
-            int m, h, d;
-            if (localMinuteOfDay(m, h, d)) {
-                lastResyncDay = d;
-                controller->setInWindow(inWindow(kNight, m), millis());
-                Serial.printf("[schedule] clock now known -> %s\n", controller->stateName());
-            }
+            lastRetry = now;  // clock never synced: retry by restart while idle
+            if (!controller->shouldPlay() && gain.silent()) restartForResync("clock unknown");
         }
         controller->tick(now);
         const bool play = controller->shouldPlay();
@@ -490,7 +505,7 @@ void loop() {
     if (Serial.available()) {
         const int c = Serial.read();
         if (c == 'r') printStatus();
-        if (c == 's') resyncClock();
+        if (c == 's' && !controller->shouldPlay()) restartForResync("serial 's'");
     }
 
     saveSettingsIfDue();
