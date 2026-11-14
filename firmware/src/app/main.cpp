@@ -19,6 +19,11 @@
 //     library waits 10 s before its first connect, so after KEY1 closes the
 //     window, further KEY1 presses are ignored until sound starts (max 30 s);
 //     otherwise an impatient second press toggled it straight back off.
+//   - Hold KEY4 for 3 s (or send 'o' over serial): save settings, fade out,
+//     restart straight into the 10-minute OTA window at any time of day
+//     (v0.2.2). Needed because a night boot skips the window and Wi-Fi is
+//     otherwise off. When the window ends the schedule resumes; at night,
+//     KEY1 closing the window does not count as "stop".
 //   - Daily clock resync = a quiet software restart at 15:00 when nothing is
 //     playing: it syncs NTP and goes straight to Bluetooth (no OTA window;
 //     only RST / power-on opens the window). Same if the clock is unknown:
@@ -58,7 +63,7 @@
 #error "OTA_PASSWORD missing: see firmware/.env.example"
 #endif
 
-#define FIRMWARE_VERSION "0.2.1"
+#define FIRMWARE_VERSION "0.2.2"
 
 namespace {
 
@@ -73,6 +78,7 @@ constexpr uint32_t kSaveDelayMs = 3000;                // batch NVS writes
 constexpr uint32_t kMarkValidAfterMs = 60000;
 constexpr int kResyncHour = 15;                        // daily restart for clock resync, if quiet
 constexpr uint32_t kKey1LockoutMs = 30000;             // after KEY1 closes the window
+constexpr uint32_t kOtaHoldMs = 3000;                  // hold KEY4 this long -> OTA window
 const Window kNight{21 * 60, 9 * 60};
 
 struct Key {
@@ -250,6 +256,19 @@ void restartForResync(const char* why) {
     ESP.restart();
 }
 
+// Restart straight into the OTA window (any time of day). The request is a
+// one-shot NVS flag read and cleared at boot.
+void restartIntoOtaWindow(const char* why) {
+    Serial.printf("[ota] %s: restarting into the update window\n", why);
+    wantPlaying.store(false);
+    delay(1200);  // let a short fade begin; the restart cuts the rest
+    prefs.putInt("tone2", wantTone.load());
+    prefs.putInt("volume", wantVolume.load());
+    prefs.putBool("otareq", true);
+    delay(100);
+    ESP.restart();
+}
+
 // --- settings ----------------------------------------------------------------
 void loadSettings() {
     prefs.begin("noisegen", false);
@@ -407,7 +426,7 @@ void setup() {
     digitalWrite(kPinPaEnable, LOW);  // analog amp off: Bluetooth-only build
     Serial.begin(115200);
     delay(300);
-    Serial.printf("\n[boot] noise-generator v%s\n", FIRMWARE_VERSION);
+    Serial.printf("\n[boot] noise-generator v%s (built %s %s)\n", FIRMWARE_VERSION, __DATE__, __TIME__);
     for (Key& k : keys) pinMode(k.gpio, k.gpio >= 34 ? INPUT : INPUT_PULLUP);
     if (!parseAddr(BT_SINK_ADDR, sinkAddr)) {
         Serial.println("[boot] BT_SINK_ADDR malformed - halting");
@@ -435,18 +454,27 @@ void setup() {
     //    restart (the daily resync) skips it. KEY1 closes it = START.
     const esp_reset_reason_t reason = esp_reset_reason();
     const bool softRestart = reason == ESP_RST_SW;
+    const bool otaRequested = prefs.getBool("otareq", false);
+    if (otaRequested) prefs.putBool("otareq", false);  // one-shot
     bool startPressed = false;
-    if (wifi && timeKnown && !night && !softRestart) startPressed = runOtaWindow();
+    if (wifi && otaRequested) startPressed = runOtaWindow();
+    else if (wifi && timeKnown && !night && !softRestart) startPressed = runOtaWindow();
     else if (wifi && night) Serial.println("[boot] night window: no OTA window, noise first");
     else if (wifi && softRestart) Serial.println("[boot] software restart: no OTA window");
+    else if (otaRequested) Serial.println("[ota] window requested but Wi-Fi failed");
     if (wifi) wifiOff();
 
     // 3. Controller, then Bluetooth.
     controller = new Controller(night, millis());
-    if (startPressed) {
+    // KEY1 closing the window means "noise now": only press START if the
+    // schedule isn't already playing (at night it would otherwise STOP).
+    if (startPressed && !controller->shouldPlay()) {
         controller->pressStartStop(millis());
         key1LockedUntil = millis() + kKey1LockoutMs;
         Serial.println("[key] start/stop -> daytime run (2 h); KEY1 locked until sound starts");
+    } else if (startPressed) {
+        key1LockedUntil = millis() + kKey1LockoutMs;
+        Serial.println("[key] window closed; schedule already playing");
     }
     wantPlaying.store(controller->shouldPlay());
     Serial.printf("[boot] state: %s | heap before Bluetooth %u KB\n", controller->stateName(),
@@ -462,6 +490,15 @@ void loop() {
     // or after kKey1LockoutMs, whichever comes first.
     if (key1LockedUntil && (int32_t)(now - key1LockedUntil) >= 0) key1LockedUntil = 0;
     if (key1LockedUntil && linkUp.load() && playingNow) key1LockedUntil = 0;
+
+    // Hold KEY4 for 3 s -> restart into the OTA window.
+    static uint32_t key4DownSince = 0;
+    if (digitalRead(23) == LOW) {
+        if (!key4DownSince) key4DownSince = now ? now : 1;
+        else if (now - key4DownSince >= kOtaHoldMs) restartIntoOtaWindow("KEY4 held");
+    } else {
+        key4DownSince = 0;
+    }
 
     const int key = pollKeys();
     if (key == 1 && key1LockedUntil) {
@@ -506,6 +543,7 @@ void loop() {
         const int c = Serial.read();
         if (c == 'r') printStatus();
         if (c == 's' && !controller->shouldPlay()) restartForResync("serial 's'");
+        if (c == 'o') restartIntoOtaWindow("serial 'o'");
     }
 
     saveSettingsIfDue();
