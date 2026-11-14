@@ -1,6 +1,6 @@
 // bttest — stream synthesized noise over Bluetooth A2DP to one speaker.
 //
-// Bench test for Phase 2 (docs/plan.md): proves NoiseSynth + Gain over a
+// Bench test for Phase 2 (docs/plans/implementation-plan.md): proves NoiseSynth + Gain over a
 // real A2DP link before Wi-Fi is added. The target speaker's address comes
 // from firmware/.env (BT_SINK_ADDR), never from tracked files.
 //

@@ -16,7 +16,7 @@ Status markers used below:
   **[confirmed]**.
 - **Flash: 4 MB** (JEDEC manufacturer 0x5E, device 0x4016). The flash voltage
   strap reads 3.3 V **[confirmed]**. So there is no 8 MB escape hatch for
-  the flash budget (`docs/plan.md`, "Known constraint").
+  the flash budget (`docs/plans/implementation-plan.md`, "Known constraint").
 - **USB bridge: Silicon Labs CP2102** (`10c4:ea60`) → `/dev/ttyUSB0`
   **[confirmed]**. The first micro-USB cable was bad. It gave power but no
   data, which looked exactly like "plugged into the POWER port".

@@ -1,16 +1,15 @@
 # noise-generator
 
 A bedside noise generator on an **ESP32-Audio-Kit (ESP32-A1S, ES8388 codec)**.
-It synthesizes brown, pink and white noise, and streams it to a Bluetooth
-speaker or plays it from the 3.5 mm jack. It runs its own nightly schedule and
-has physical buttons for noise type, nap timer and volume. Home Assistant
-controls it over MQTT, and it updates over the air.
+It synthesizes grey-to-brown noise and streams it to a Bluetooth speaker. It
+runs its own nightly schedule, and has physical buttons for on/off and nap,
+tone (darker/brighter) and volume. It updates over the air.
 
 It replaces an old phone that did exactly one job: play a brown-noise MP3 to a
 Bluetooth speaker every night.
 
-**Status:** early. The research and plan are done, and bring-up firmware
-exists. See [docs/plan.md](docs/plan.md).
+**Status:** the board is brought up. Noise synthesis and Bluetooth streaming
+work on the bench. Building the real firmware is next. See [docs/plans/implementation-plan.md](docs/plans/implementation-plan.md).
 
 ## Why this board
 
@@ -21,7 +20,7 @@ codec with a headphone output, a microSD slot, PSRAM and six buttons.
 
 ## Docs
 
-- [docs/plan.md](docs/plan.md) — phased implementation plan
+- [docs/plans/implementation-plan.md](docs/plans/implementation-plan.md) — phased implementation plan
 - [docs/decisions.md](docs/decisions.md) — design decisions and their reasons
 - [docs/hardware.md](docs/hardware.md) — board reference: pins, conflicts, quirks
 - [docs/runbooks/bring-up.md](docs/runbooks/bring-up.md) — first USB bring-up

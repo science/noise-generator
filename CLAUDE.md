@@ -14,8 +14,9 @@ Public repo `science/noise-generator`, Apache-2.0.
 
 ## Read first
 
-- **`docs/plan.md`** — the phased implementation plan (Phase 0 bring-up →
-  Phase 6 Pixel retirement). Where the work is and what comes next.
+- **`docs/plans/implementation-plan.md`** — the plan. It opens with a summary of the concepts,
+  then the design, phases (0 done → 6 cutover), and the open questions. Where
+  the work is and what comes next.
 - **`docs/decisions.md`** — D1–D8: why PlatformIO/Arduino and not ESPHome,
   why Bluetooth output sits behind a Wi-Fi-coexistence spike, why the noise is
   synthesized, the (deferred) HA-integration question, licensing, schedule ownership, toolchain pinning,
@@ -23,7 +24,8 @@ Public repo `science/noise-generator`, Apache-2.0.
 - **`docs/hardware.md`** — board facts, each marked confirmed /
   from-schematic / from-library. Pin maps, the button-vs-codec pin conflicts,
   SD card, USB ports.
-- **`QUESTIONS.md`** — what is waiting on the user.
+- **Questions waiting on the user** are at the end of the plan, each with a
+  `> Your answer:` slot. Read the user's answers there before starting a phase.
 - `docs/runbooks/bring-up.md`, `docs/runbooks/flash.md` — procedures.
 
 ## Status (update as phases land)
@@ -91,7 +93,7 @@ regression test.
   budget; never flash it) and `native` (host tests). Phases add `app` and
   `app_ota`.
 - **Flash budget is tight.** A2DP + Wi-Fi + MQTT alone use 85% of a 1.9 MB
-  OTA slot (`docs/plan.md`, "Known constraint"). Check the `Flash:` line after
+  OTA slot (`docs/plans/implementation-plan.md`, "Known constraint"). Check the `Flash:` line after
   adding code or libraries. The platform and
   libraries are pinned to exact versions. Partition table is `min_spiffs.csv`
   (two ~1.9 MB OTA slots; Bluetooth Classic + Wi-Fi builds are large).

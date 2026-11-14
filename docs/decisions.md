@@ -98,6 +98,12 @@ while connected to Wi-Fi and publishing MQTT heartbeats. Run it overnight for
 3. Bluetooth only, no Wi-Fi: schedule and buttons on the device, no Home
    Assistant control. This fails a stated goal, so it is a last resort.
 
+**Reconnect behaviour (bench, 2026-11-13).** After the speaker drops, the
+library retries the stored address 3 times, 10 s apart. It then falls back to
+discovery scanning, and only reconnects when the speaker shows up in a scan.
+One test took about 2 minutes. The real firmware needs its own supervisor
+that never gives up (plan, "Speaker link supervisor").
+
 **Never call `BluetoothA2DPSource::set_volume()`.** Found in the library
 source, 2026-11-13: on a source it also sends an AVRCP absolute-volume
 command. That changes the speaker's *own* volume setting, which would
@@ -157,7 +163,14 @@ white noise are a pseudo-random number generator followed by a small filter:
 - **Tunable from Home Assistant** (colour, depth, width) without re-rendering
   files.
 
-**SD-card files (Phase 5, optional)** cover sounds that are not simple noise
+**Update 2026-11-13, after a listening test on the desk Edifier R1280DBs.**
+The user picked *deep brown* ("like a jet airplane cabin"). They want grey
+and brown only, never white or pink. The noise-type switcher therefore
+becomes a **tone ladder**: one darker/brighter control running from grey
+through brown to deeper browns (plan, "Sound engine"). White and pink stay in
+the code, as test references only.
+
+**SD-card files (parked; the user does not need them)** cover sounds that are not simple noise
 colours, such as rain, a fan or surf, and let the user's own long MP3s play.
 Preferred formats:
 
@@ -194,11 +207,11 @@ themselves. A last-will message marks the device unavailable when it drops
 off.
 
 **The catch:** `~/dev/home-assistant` runs no MQTT broker today.
-`docs/plan.md` there already anticipates adding Mosquitto as one more Docker
+`docs/plans/implementation-plan.md` there already anticipates adding Mosquitto as one more Docker
 image. Adding it means a new service in that repo's `docker-compose.yml`, a
 password file, and the HA MQTT integration. That work happens **in the HA repo,
 under its own deploy discipline** (`production` branch, t480 pull), not from
-here. It needs the user's go-ahead (QUESTIONS.md).
+here. It needs the user's go-ahead (the questions at the end of `docs/plans/implementation-plan.md`).
 
 **Alternatives considered.**
 
@@ -267,7 +280,7 @@ Sensibo "off-HA safeties": schedules that deliberately run on the device. If NTP
 has never synced since boot, the device keeps its last state and retries.
 It does not guess the time.
 
-**Manual-override semantics** (to confirm with the user, see QUESTIONS.md):
+**Manual-override semantics** (to confirm with the user, see the plan's questions section):
 
 - A manual on/off holds until the next schedule boundary, then the schedule
   resumes. This is how a thermostat "hold until next change" works.

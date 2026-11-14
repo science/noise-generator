@@ -115,5 +115,5 @@ reports `mount FAILED`, work through these in order:
 - Update `docs/hardware.md`: board variant, keys, DIP switches, flash/PSRAM,
   MAC, SD result.
 - If the variant differs from v1, the codec pins in the Phase 1 plan change.
-  Update `docs/plan.md` too.
+  Update `docs/plans/implementation-plan.md` too.
 - Commit: `docs: record Phase 0 bring-up findings`.
