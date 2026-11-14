@@ -42,6 +42,13 @@ Public repo `science/noise-generator`, Apache-2.0.
   written test-first (41 native tests). The `bttest` env streams them over
   A2DP to a desk test speaker, verified on-device. The desk speaker's
   address lives in `firmware/.env`.
+- 2026-11-13 evening: `Controller` (user's state rules), `schedule` and
+  `ToneEngine` (9-step grey → deep-brown ladder) are done test-first: 74
+  native tests. The `app` env is the bedroom firmware (v0.1.x): boot Wi-Fi +
+  NTP, a 10-minute daytime OTA window that KEY1 closes, then Bluetooth only.
+  OTA push verified on the bench. **Opening the serial port resets the
+  board, and a reset within 60 s of an OTA rolls it back**
+  (`docs/runbooks/flash.md`).
 
 ## Toolchain — always through the wrappers
 

@@ -47,7 +47,7 @@
 #error "OTA_PASSWORD missing: see firmware/.env.example"
 #endif
 
-#define FIRMWARE_VERSION "0.1.0"
+#define FIRMWARE_VERSION "0.1.2"
 
 namespace {
 
@@ -305,6 +305,17 @@ bool handleSettingKey(int key) {
     return false;
 }
 
+// A freshly pushed image is "pending verify" until it marks itself valid; a
+// reset before that rolls back to the previous image. Called from BOTH the
+// OTA-window loop and loop(): the boot window can last 10 minutes, and v0.1.1
+// rolled back on the bench because only loop() made this call.
+void markValidIfDue() {
+    if (markedValid || millis() < kMarkValidAfterMs) return;
+    markedValid = true;
+    esp_ota_mark_app_valid_cancel_rollback();
+    Serial.println("[ota] running image marked valid");
+}
+
 // --- OTA window ----------------------------------------------------------------
 // Returns true if KEY1 ended the window (the press then counts as START).
 bool runOtaWindow() {
@@ -328,6 +339,7 @@ bool runOtaWindow() {
         }
         if (key) handleSettingKey(key);
         saveSettingsIfDue();
+        markValidIfDue();
         if (millis() - lastNote > 60000) {
             lastNote = millis();
             Serial.printf("[ota] window: %lu min left\n",
@@ -466,11 +478,7 @@ void loop() {
 
     saveSettingsIfDue();
 
-    if (!markedValid && now > kMarkValidAfterMs) {
-        markedValid = true;
-        esp_ota_mark_app_valid_cancel_rollback();
-        Serial.println("[ota] running image marked valid");
-    }
+    markValidIfDue();
 
     if (now - lastStatus >= 60000) {
         lastStatus = now;

@@ -33,7 +33,36 @@ The board must be on its **UART** port. If the upload cannot connect: hold
 BOOT, tap RST, release BOOT. If that fails too, remove the SD card (its
 pull-up on GPIO2 can block the bootloader).
 
-## OTA flash (normal, once Phase 3 lands)
+## Two gotchas (learned 2026-11-13)
+
+- **Opening the serial port resets the board.** On Linux, the CP2102 driver
+  raises the DTR/RTS lines when the port is opened. The board's auto-reset
+  circuit turns that into a reset. This happens even if pyserial sets them
+  low first. So any serial monitor attach is a reboot.
+- **A new OTA image must run for 60 s before it counts as good.** The app
+  marks itself valid after 60 s (`kMarkValidAfterMs`). Any reset before then,
+  including the serial-port reset above or a power blip, makes the
+  bootloader roll back to the previous image. That is the intended
+  protection against a bad update, but it means: after a push, **don't open
+  the serial port or power-cycle for at least 70 s.** The first OTA test on
+  2026-11-13 rolled back for exactly this reason.
+
+## OTA flash (normal, app firmware)
+
+Current practice with the `app` firmware:
+
+1. In daytime (outside 21:00–09:00), press RST. The board boots, syncs its
+   clock and opens a 10-minute update window before starting Bluetooth.
+   Pressing KEY1 closes the window early and starts the noise. At night the
+   window is skipped.
+2. `firmware/.env` has `NOISE_IP` (the board's address, printed at boot) and
+   `OTA_PASSWORD`. `load_env.py` feeds both to espota.
+3. Bump `FIRMWARE_VERSION` in `src/app/main.cpp`, then run
+   `./scripts/pio.sh run -e app_ota -t upload`.
+4. Wait at least 70 s, then confirm the version (the boot banner, or the
+   status line).
+
+### Original plan text
 
 ```
 ./scripts/pio.sh run -e app_ota -t upload
