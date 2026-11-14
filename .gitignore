@@ -1,0 +1,25 @@
+# PlatformIO build output and IDE state
+firmware/.pio/
+.pio/
+.vscode/
+*.pyc
+__pycache__/
+
+# Build-time secrets (Wi-Fi, MQTT, OTA password) — see firmware/.env.example
+firmware/.env
+.env
+
+# Stock-firmware and rollback flash images. Keep them on disk (and in
+# Bitwarden/backup if precious), never in git: a full flash dump contains the
+# vendor's Wi-Fi calibration and, once our firmware runs, our NVS secrets.
+backup/*
+!backup/README.md
+
+# Audio assets live on the SD card, not in git
+*.mp3
+*.wav
+*.flac
+
+# Repo-local toolchain (scripts/pio.sh)
+.venv/
+.platformio-core/

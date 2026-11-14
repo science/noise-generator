@@ -1,0 +1,13 @@
+# Toolchain pin for this repo. scripts/pio.sh enforces it.
+#
+# WHY A REPO-LOCAL VENV: the pinned pioarduino platform (Arduino core 3.3.12,
+# see firmware/platformio.ini) requires PlatformIO Core >= 6.2.0. The global
+# ~/.platformio/penv on bambam is 6.1.19 and serves ~/dev/hot-tub-controller;
+# upgrading it from here would change another project's toolchain behind its
+# back. Same lesson as ~/dev/home-assistant/esphome/requirements.txt: the repo
+# declares its toolchain, and a wrapper refuses to run against anything else.
+#
+# TO CHANGE A VERSION: edit this file in a commit, then `./scripts/pio.sh --sync`.
+# Never `pip install --upgrade` inside .venv — that silently re-opens drift.
+platformio==6.2.0
+esptool==5.6.0

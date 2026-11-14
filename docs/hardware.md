@@ -1,0 +1,179 @@
+# Hardware reference — AI-Thinker ESP32-Audio-Kit V2.2 (ESP32-A1S)
+
+Status markers used below:
+
+- **[confirmed]** — seen on this physical board with the probe firmware.
+- **[from schematic]** — read from the vendor's module schematic (Amazon
+  listing image, 2026-11-13), not yet measured.
+- **[from library/community]** — from pschatzmann's `arduino-audio-driver` pin
+  tables, trombik's `esp-adf-component-ai-thinker-esp32-a1s`, or forum posts.
+  These disagree across board revisions, so treat them as hypotheses.
+
+As of 2026-11-13 nothing is **[confirmed]** yet: the board did not show up on
+USB at all (see "USB ports" below). Phase 0 (`docs/plan.md`) fills this in.
+
+## What the board is
+
+The vendor listing calls it **ESP32-Audio-Kit_V2.2**, built on the
+AI-Thinker **ESP32-A1S** module. The listing and the schematic say:
+
+- The module holds an **original ESP32** (dual-core Xtensa LX6, 240 MHz), plus
+  a separate SPI flash chip and a separate SPI **PSRAM** chip on the module
+  **[from schematic]**. The A1S is normally sold as 4 MB flash + 8 MB PSRAM.
+  The probe and `esptool flash-id` confirm the real sizes.
+- **Bluetooth 4.2 BR/EDR + BLE** (the listing). "BR/EDR" is Bluetooth Classic,
+  the part of Bluetooth that carries A2DP stereo audio. The original ESP32 is
+  the only ESP32 family member with Classic. The ESP32-S3, C3 and C6 have BLE
+  only and **cannot** stream audio to a Bluetooth speaker. That is why this
+  board, and not a newer chip, fits the job.
+- The audio codec is an **Everest ES8388** **[from schematic]**: a stereo
+  DAC + ADC, with a headphone amplifier, controlled over I2C and fed audio over
+  I2S. (Some older A1S boards used an AC101 codec instead. That chip is end of
+  life, and the schematic shows ES8388.)
+- There are two small class-D speaker amplifiers for the two JST speaker
+  connectors. Their shared enable line is GPIO21 **[from library/community]**.
+- Power: 5 V, 4.7–5.3 V, and the listing asks for a supply that can deliver
+  more than 1 A. A powered USB hub port is fine. Wi-Fi and Bluetooth transmit
+  bursts are the peaks.
+
+The listing claims MP3/AAC/FLAC/WAV playback, "A2DP Source", DLNA and so on.
+Those are features of Espressif's ESP-ADF software framework, not of the board.
+The board is just an ESP32 plus a codec, and any of them can be built on it.
+
+## The two 3.5 mm jacks
+
+The user remembered them as 2.5 mm. On this board they are 3.5 mm:
+
+- **Headphone out (`PHONEJACK`)** — the ES8388 headphone driver. This is the
+  analog line output we would feed into a speaker's AUX input, or into a
+  Bluetooth transmitter dongle (see decision D2 in `docs/decisions.md`).
+  Plug-in detection is on GPIO39 **[from library/community]**.
+- **Line in (`LINEIN` / AUX in)** — the ES8388 ADC input. We have no use for it.
+  Plug-in detection is on GPIO12 **[from library/community]**.
+
+GPIO12 is also an ESP32 *strapping pin*. The chip reads its level at reset to
+choose the flash voltage. Firmware must only ever read it, never drive it.
+
+## Codec wiring — this board is the "v2" pin map
+
+The module schematic labels the codec's buses like this **[from schematic]**:
+
+- I2C (control): **SCL = GPIO23, SDA = GPIO18**.
+- I2S (audio): **MCLK = GPIO0, BCLK (SCLK) = GPIO5, LRCK (WS) = GPIO25,
+  DSDIN (ESP32 → codec, playback) = GPIO26, ASDOUT (codec → ESP32,
+  recording) = GPIO35**.
+
+`arduino-audio-driver` names two ES8388 variants:
+
+- **v1**: I2C on SDA 33 / SCL 32, BCLK on GPIO27.
+- **v2**: I2C on SDA 18 / SCL 23, BCLK on GPIO5.
+
+The schematic matches **v2**. The probe confirms it by scanning both buses for
+the ES8388 at I2C address 0x10 (`firmware/lib/BoardId`). If the probe says v1
+instead, this section is wrong and gets rewritten.
+
+## Buttons (KEY1–KEY6) and why the variant matters
+
+The board has six user keys plus RST (reset) and BOOT. The common key map
+**[from library/community]**, with the function names ESP-ADF gives them:
+
+- KEY1 = GPIO36 (Mode). GPIO36 is input-only and needs the board's external
+  pull-up resistor.
+- KEY2 = GPIO13 (Rec). GPIO13 is also the SD card's DAT3 line.
+- KEY3 = GPIO19 (Play).
+- KEY4 = GPIO23 (Set). On v2 this is the codec's **I2C SCL**.
+- KEY5 = GPIO18 (Vol−). On v2 this is the codec's **I2C SDA**.
+- KEY6 = GPIO5 (Vol+). On v2 this is the codec's **I2S bit clock**.
+
+What that means in practice on a v2 board:
+
+- **Safe with no tricks: KEY1 and KEY3.** KEY2 is also safe when the SD card
+  is not in use.
+- **KEY2 alongside the SD card — maybe.** In 1-bit SD mode the ESP32 drives
+  only CLK, CMD and D0. D3 (GPIO13) just has to be pulled high while the card
+  is initialised. Reading GPIO13 as a button afterwards may well work. Phase 0
+  tests it. Until then, the conservative answer (`usableKeys()`) treats KEY2
+  as lost when the SD card is used.
+- **KEY4 and KEY5 (the I2C lines) — likely usable after the codec is set up.**
+  The ES8388 only needs I2C to load its registers. If volume is done digitally
+  (by scaling the samples), the firmware can configure the codec once, release
+  the I2C bus, and read GPIO23/GPIO18 as buttons. A press then looks to the
+  codec like a START/STOP pair with no address byte, or like clock pulses
+  without a START. Both are ignored. To verify in Phase 1.
+- **KEY6 (I2S bit clock) — do not press while analog audio is playing.** The
+  ESP32 actively drives GPIO5 as a clock output. The button shorts it to
+  ground, which glitches the audio and stresses the pin driver.
+- **When output goes over Bluetooth only, the codec is not used at all.** I2C
+  and I2S can then stay unconfigured, and all six keys become plain buttons.
+  This is one more reason the output path (decision D2) shapes the button
+  design.
+
+A sticker or paint dot over any key that must not be pressed is a reasonable
+physical safeguard.
+
+## SD card slot
+
+- Wiring **[from library/community]**: SDMMC on the ESP32's fixed pins.
+  CLK = GPIO14, CMD = GPIO15, D0 = GPIO2, D3 = GPIO13. Use 1-bit mode. 4-bit
+  mode would also need D1 = GPIO4 and D2 = GPIO12, and GPIO12 is the strapping
+  pin and the aux-detect line.
+- GPIO2 is a strapping pin as well. The SD card's pull-up on it can interfere
+  with flashing on some boards. If a USB flash fails with "Failed to connect",
+  remove the SD card and try again.
+- The DIP switches (the 5-way block in the middle of the board) connect pull-up
+  resistors to some of these lines. trombik's notes say **the `DATA3` and
+  `CMD` switches must be ON for the SD card to work**. A community ESPHome
+  config for the V2.2 board uses switches **1, 2, 3 ON and 4, 5 OFF**. Record
+  the real silkscreen labels and working positions here at bring-up.
+- **The 64 GB card from the old phone will be SDXC, formatted exFAT or as an
+  Android "adopted" encrypted volume.** The Arduino SD_MMC library mounts FAT32
+  reliably. exFAT depends on a FatFs build option we should not rely on. So:
+  reformat it as a single FAT32 partition. On Linux:
+  `sudo mkfs.vfat -F 32 -n NOISE /dev/sdX1`, after creating one partition with
+  `fdisk`. FAT32 caps a single file at 4 GB. That is about 6.7 hours of 16-bit
+  44.1 kHz stereo WAV, or days of MP3. Procedure:
+  `docs/runbooks/bring-up.md`.
+
+## USB ports — why the board did not enumerate on 2026-11-13
+
+The Audio Kit has **two micro-USB ports**:
+
+- **UART** — wired to a USB-to-serial bridge (a CP2102 or CH340, which shows up
+  as `/dev/ttyUSB0`). This is the port for flashing and serial logs.
+- **POWER** — 5 V only, no data lines.
+
+On 2026-11-13 the board was plugged into the Plugable hub, but `lsusb` showed
+no serial bridge and there was no `/dev/ttyUSB*`. The likeliest cause is that
+the cable is in the **POWER** port. Other possibilities: a charge-only cable,
+or the board's power switch is off. Fix: move the cable to the port labelled
+UART. Then `./scripts/test.sh status` should list `/dev/ttyUSB0`, and `lsusb`
+should show `10c4:ea60` (CP2102) or `1a86:7523` (CH340).
+
+The user `steve` is already in the `dialout` group, so no udev rule or sudo is
+needed to open the port.
+
+## Other on-board parts
+
+- LEDs: one user LED on GPIO22 **[from library/community]**. There is probably
+  also an always-on red power LED. That one may need tape for a dark bedroom,
+  since firmware cannot turn it off.
+- Two on-board MEMS microphones (not needed). Some boards need capacitor
+  changes before they work at all.
+- A Li-ion battery connector and charger. The charger is not wired to any GPIO,
+  so battery level cannot be read.
+- A 14-pin header **[from Amazon listing]** that exposes GND, IO0, RST,
+  TX0/RX0, 3V3, IO21, IO22, IO19, IO23, IO18, IO5. Useful for an external
+  serial adapter, or for a logic analyser on the codec lines.
+
+## Sources
+
+- Vendor module schematic and header pinout: Amazon "EC Buying ESP32-Audio-Kit"
+  listing images (user-provided, 2026-11-13).
+- `arduino-audio-driver` board definitions `AudioKitEs8388v1.h`,
+  `AudioKitEs8388v2.h`, `AudioKitAC101.h`
+  (github.com/pschatzmann/arduino-audio-driver, `src/AudioBoards/`).
+- trombik, ESP-ADF board component for the A1S
+  (github.com/trombik/esp-adf-component-ai-thinker-esp32-a1s). It tests
+  A2DP sink only; A2DP source is listed as untested.
+- Home Assistant community thread "ESP32-A1S Audio Kit Media Player"
+  (community.home-assistant.io/t/522245) for key pins and DIP settings.
