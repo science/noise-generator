@@ -426,3 +426,109 @@ your Bluetooth off/on test, did you toggle the speaker twice? The log shows
 a second disconnect at 18:56:24 that took about 2 minutes to recover.
 
 > Your answer: No clicks at all - all sounds were clean: vol up/down, fade in/out, noise tone switch were all excellent. Regarding bench test: yes, I switched off b/t for a short period and the system reconnected, then I switched off for a long period (2 min) and when I turned it back on, the device reconnected well after only 5 second delay. 
+
+---
+
+## Follow-up questions (round 2, 2026-11-13)
+
+These come from reviewing your answers above. Same format as before.
+
+**F1. Tonight's scope.** To retire the Pixel tonight, I'd build a minimum
+"first night" firmware and leave the rest for over-the-air updates later.
+Proposed for tonight:
+
+- deep brown by default;
+- KEY2/KEY3 stepping through a **brown-only** ladder, from lighter brown
+  to deeper (grey is added in a later update, once we can tune it by ear);
+- KEY1 start/stop with your state rules (Q3);
+- KEY5/KEY6 volume;
+- 5 s fades;
+- tone and volume saved across reboots;
+- the 21:00–09:00 Pacific schedule;
+- Bluetooth link kept up at all times, with a reconnect that never gives
+  up;
+- Wi-Fi only briefly at boot, to set the clock.
+
+Not tonight: grey, phone-home to Home Assistant, vacation mode, the
+pairing button. Is that the right cut?
+
+> Your answer:
+
+**F2. The R2000DB's Bluetooth name.** For the first connection I'd have the
+ESP32 look for the speaker by name, then remember its address. What name
+does the Pixel show for it in its Bluetooth settings (e.g. "EDIFIER
+R2000DB")? If you can see its address there instead, that works too.
+
+> Your answer:
+
+**F3. Bedroom power.** The board needs a 5 V USB supply of at least 1 A, on
+an **always-on** outlet. Please don't use the Kasa "Tablet charger" plug the
+Pixel uses. That plug is switched off for 6–9 hours at a time by the Pixel's
+own Tasker profile. Once the Pixel retires, nothing will turn it back on, so
+it could be left off. What will you plug it into?
+
+> Your answer:
+
+**F4. Wi-Fi credentials.** OK to copy the IoT Wi-Fi network name and
+password from `~/dev/home-assistant/esphome/secrets.yaml` into this repo's
+gitignored `firmware/.env`? They'd be compiled into the firmware. That's
+fine with push updates, because the firmware file never leaves your
+machines. (If we ever switch to pulling updates from GitHub, they move into
+the device's own storage first.)
+
+> Your answer:
+
+**F5. START near the end of the night window.** By your rules, pressing
+START at 08:50 (inside the window, after a stop) plays until 09:00, so only
+10 minutes. Is that what you want? Or should START always give at least 2
+hours (i.e. play until 09:00 or 2 hours from now, whichever is later)?
+
+> Your answer:
+
+**F6. Vacation mode and manual START.** When vacation mode blocks the
+nightly autoplay, should KEY1 START still work, e.g. for a house sitter?
+(Proposed: yes. Vacation mode only blocks the *automatic* start.)
+
+> Your answer:
+
+**F7. How the device talks to Home Assistant (for later).** The simplest
+match for "phone home every few hours" is the sleep-monitor pattern. The
+device makes ordinary web requests to HA's REST API with an access token:
+it posts its health and logs, and reads `binary_sensor.vacation_active`.
+No broker, and no server on the device.
+
+**My concern:** an HA long-lived token has full access to everything HA
+controls (climate, hot tub, locks if any). It would sit on a board in the
+bedroom whose flash anyone with a USB cable can read. Mitigations:
+
+- create a dedicated HA user for the device, so the token can be revoked on
+  its own and its actions show up under that user's name;
+- keep the token out of the firmware file.
+
+HA has no read-only tokens, so this limits the damage rather than
+removing it. OK with a dedicated user + token? Or would you rather avoid a
+token on the device at all? Without one it could still post health data via
+an HA webhook, but it could not read vacation mode.
+
+> Your answer:
+
+**F8. When updates can be pushed.** With on-demand Wi-Fi, the device only
+listens for an update while Wi-Fi is up. Proposal: Wi-Fi plus the update
+listener stay up for 10 minutes after every boot. To push an update in the
+daytime, press RST, then run the push command within 10 minutes.
+Alternatives:
+
+- holding the now-unused KEY4 for 5 s opens the same 10-minute window
+  without a reboot;
+- or the window also opens during each phone-home check.
+
+Preference?
+
+> Your answer:
+
+**F9. The Pixel after tonight.** I'd keep it charged, with Bluetooth off, in
+a drawer for about a week as a fallback, rather than wiping or repurposing
+it straight away. The HA-side cleanup (the `pixel3-charger` plug automations
+and Tasker mappings) happens later in the HA repo. OK?
+
+> Your answer:
