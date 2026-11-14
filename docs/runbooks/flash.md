@@ -51,10 +51,19 @@ pull-up on GPIO2 can block the bootloader).
 
 Current practice with the `app` firmware:
 
-1. In daytime (outside 21:00–09:00), press RST. The board boots, syncs its
-   clock and opens a 10-minute update window before starting Bluetooth.
-   Pressing KEY1 closes the window early and starts the noise. At night the
-   window is skipped.
+1. Open the 10-minute update window, in either of two ways:
+   - **Any time:** hold **KEY4 for 3 s**, or send `o` over serial. The noise
+     fades, settings are saved, and the board restarts into the window
+     (v0.2.2+). Over USB, sending `o` with
+     `scratchpad/tools/ota_window.py`-style code works; remember that opening
+     the port resets the board first.
+   - **Daytime only:** press RST, or power the board up. A night-time boot
+     skips the window, and a software restart (the 15:00 resync) skips it
+     too.
+
+   While the window is open, Bluetooth is off (Wi-Fi and Bluetooth never
+   run together, because of the memory limit), so there is no noise. KEY1
+   closes the window early. After the window, the schedule resumes.
 2. `firmware/.env` has `NOISE_IP` (the board's address, printed at boot) and
    `OTA_PASSWORD`. `load_env.py` feeds both to espota.
 3. Bump `FIRMWARE_VERSION` in `src/app/main.cpp`, then run
