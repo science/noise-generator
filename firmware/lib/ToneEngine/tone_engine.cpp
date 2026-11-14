@@ -52,10 +52,11 @@ double twoPoleVar(double a1, double a2) {
 
 // Grey's gain has no tidy closed form, so sum its squared impulse response
 // (in double, once). The slowest pole (25 Hz) decays by e every ~280
-// samples; 100k samples is far past convergence.
+// samples; by 20k samples the tail is below 1e-25 (cheap on the ESP32, whose
+// doubles are software-emulated).
 double greyVar(const double* z, double p) {
     double xPrev[kGreySections] = {0}, yPrev[kGreySections] = {0}, energy = 0;
-    for (int n = 0; n < 100000; ++n) {
+    for (int n = 0; n < 20000; ++n) {
         double x = (n == 0) ? 1.0 : 0.0;
         for (int s = 0; s < kGreySections; ++s) {
             const double y = x - z[s] * xPrev[s] + (s < kGreyPoles ? p * yPrev[s] : 0.0);

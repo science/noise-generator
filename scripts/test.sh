@@ -15,7 +15,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FW="$ROOT/firmware"
 PIO="${PIO:-$ROOT/scripts/pio.sh}"
 # Device envs to compile. Add new ones here as phases land (app, app_ota...).
-DEVICE_ENVS=(probe bttest libcheck)
+DEVICE_ENVS=(probe app bttest libcheck)
 
 run_native() {
   echo "== native unit tests"
