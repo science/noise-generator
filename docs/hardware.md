@@ -101,7 +101,21 @@ them.
 
 ## Buttons (KEY1–KEY6) — all six usable **[confirmed]**
 
-The board has six user keys plus RST (reset) and BOOT. All six were pressed
+The board has **eight buttons**. Left to right, they are labelled RST, BOOT,
+KEY1 … KEY6.
+
+- **RST** resets the chip (it pulls the EN line low). It is not a GPIO, and
+  firmware cannot read it. Every press reboots the board. The probe's
+  one-blink-on-boot LED made it look like a "button light" on 2026-11-13.
+- **BOOT** is GPIO0, a strapping pin. If held during reset, the chip enters
+  the USB bootloader instead of running firmware. On this v1 board GPIO0 is
+  also the codec's **I2S MCLK** (master clock) output. Pressing BOOT while
+  analog audio plays would short that clock to ground, so firmware must not
+  use BOOT as a button, and it should not be pressed during analog playback.
+  It is harmless during Bluetooth-only output, because I2S is then not
+  running.
+
+All six user keys were pressed
 in turn on 2026-11-13. Each logged exactly one PRESSED and one released
 event, with no bounce visible at the probe's 10 ms polling rate. All six
 are active-low: the line reads LOW while the key is held. The silkscreen

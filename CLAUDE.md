@@ -35,6 +35,11 @@ Public repo `science/noise-generator`, Apache-2.0.
   up and verified in `backup/`. Next: flash the probe, with the user's OK.
   The SD card is optional. The HA integration method (D4) is deferred by the
   user; do not push MQTT or a web API until it is discussed.
+- 2026-11-13: probe → all six keys work, ES8388 v1, PSRAM 4 MB. `NoiseSynth`
+  (white/pink/brown/deep brown) and `Gain` (volume curve, fades, ceiling) are
+  written test-first (41 native tests). The `bttest` env streams them over
+  A2DP to a desk test speaker, verified on-device. The desk speaker's
+  address lives in `firmware/.env`.
 
 ## Toolchain — always through the wrappers
 
@@ -95,6 +100,17 @@ regression test.
   and never touches the codec.
 - `firmware/lib/BoardId/` — classifies the board variant from I2C scan
   results, and lists the usable keys.
+- `firmware/lib/NoiseSynth/` — the noise generator. xorshift64 white noise,
+  Kellet pink, a one-pole brown at 140 Hz, plus a 500 Hz second pole for deep
+  brown. All types are normalised to 0.18 RMS. Interleaved stereo float.
+- `firmware/lib/Gain/` — volume 0–100 on a 50 dB curve, fades, a ceiling
+  that is never exceeded, float → int16.
+- `firmware/src/bttest/` — A2DP source test: synth → gain → speaker at
+  `BT_SINK_ADDR`. Keys: KEY1 play/stop, KEY3 type, KEY5/6 volume, KEY4
+  status. **Never call `a2dp.set_volume()`.** It changes the speaker's own
+  volume via AVRCP (D2).
+- `firmware/load_env.py` + `firmware/.env` (gitignored) — site values as
+  build macros. See `.env.example`.
 
 ## Hardware facts that bite
 

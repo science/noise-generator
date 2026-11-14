@@ -116,6 +116,18 @@ them and logs the count).
 
 ## Phase 2 — Bluetooth A2DP source + the Wi-Fi coexistence go/no-go
 
+**Progress 2026-11-13:** the `bttest` env streams `NoiseSynth` → `Gain` to a
+desk test speaker ("TP-Link_Music", address in `firmware/.env`). Results:
+
+- connected and authenticated about 2 s after the reconnect attempt;
+- media started about 10 s after boot;
+- steady 44,049 frames/s delivered (the 44.1 kHz rate);
+- free heap flat at 123 KB, minimum 115 KB.
+
+That was Bluetooth only, with no Wi-Fi yet. Not done yet: a listening check,
+the coexistence soak, and the R2000DB.
+
+
 1. `A2dpSink` built on ESP32-A2DP `BluetoothA2DPSource`. The data callback pulls
    from the same `Source → Gain` chain. It connects to the speaker by name or
    MAC (stored in NVS) and reconnects automatically.
@@ -201,6 +213,22 @@ roll back (test this once, on the bench).
 4. NVS persistence for volume, default type, schedule, ceiling and speaker
    address. Writes are debounced so flash is not worn out by repeated
    volume-key presses.
+
+5. **Setup idea (user, 2026-11-13): a "pair" button.** On a long press,
+   scan for nearby Bluetooth audio devices, pick the strongest one, connect,
+   and store its address in NVS as the new speaker. Notes for the design:
+   - Scanning is explicit. The `bttest` firmware showed that a stored address
+     reconnects directly without any scan, so the scan logging never ran.
+   - Filter on the Bluetooth "class of device", so that only audio renderers
+     (speakers, headphones) count. Otherwise a phone or laptop with a stronger
+     signal would win.
+   - Require a minimum signal strength, so a neighbour's speaker is not
+     grabbed.
+   - Confirm with a short, quiet chime on the new speaker. A second long
+     press within 10 s reverts to the previous address.
+   - ESP32-A2DP already supports this: `set_ssid_callback` is called once per
+     device found, with its name, address and signal strength (RSSI). Return
+     true to connect.
 
 **Done when** the device runs a full schedule cycle unattended, buttons and HA
 agree with each other (state is always echoed to HA), and a reboot mid-night

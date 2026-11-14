@@ -98,6 +98,13 @@ while connected to Wi-Fi and publishing MQTT heartbeats. Run it overnight for
 3. Bluetooth only, no Wi-Fi: schedule and buttons on the device, no Home
    Assistant control. This fails a stated goal, so it is a last resort.
 
+**Never call `BluetoothA2DPSource::set_volume()`.** Found in the library
+source, 2026-11-13: on a source it also sends an AVRCP absolute-volume
+command. That changes the speaker's *own* volume setting, which would
+persist on the speaker and surprise the next user of the R2000DB. As long as
+it is never called, the library passes our samples through untouched.
+`Gain` is then the only volume control.
+
 The firmware keeps the output behind one interface (`AudioSink`: either the
 `I2sCodecSink` or the `A2dpSink`), so switching is a config change and not a
 rewrite. The analog path gets built in Phase 1 regardless, because it is the
