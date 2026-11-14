@@ -71,6 +71,32 @@ Current practice with the `app` firmware:
 4. Wait at least 70 s, then confirm the version (the boot banner, or the
    status line).
 
+## Reading the event log remotely (v0.3.0+)
+
+The board keeps its event lines (boot, Wi-Fi, Bluetooth outcomes, scans,
+keys that change state) in a 4 KB log in RTC memory. That memory survives a
+software restart, but not power loss or the RST button.
+
+1. Hold KEY4 for 3 s. The board restarts into the update window, and the
+   log comes along.
+2. Run `nc -q 1 <NOISE_IP> 2323`. The board sends the log, oldest line
+   first, and closes the connection.
+3. Over USB, sending `l` prints the same log. Opening the port resets the
+   board, but that is a chip reset: the log is lost, so prefer the Wi-Fi
+   path for anything that happened before.
+
+What the Bluetooth lines mean:
+
+- `no answer from speaker (page timeout)`: the board called the speaker's
+  address and nothing replied. The speaker is off, out of range, connected
+  to something else, or not accepting connections.
+- `speaker refused` / `pairing failed (refused)`: it answered, then
+  refused the pairing or the connection.
+- `stale pairing key`: one side forgot the other. The board deletes its own
+  key and re-pairs on the next attempt.
+- `[scan] done: speaker VISIBLE rssi N`: the speaker is discoverable (in
+  pairing mode). RSSI is signal strength in dBm; above about -80 is fine.
+
 ### Original plan text
 
 ```

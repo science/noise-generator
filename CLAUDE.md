@@ -58,6 +58,16 @@ Public repo `science/noise-generator`, Apache-2.0.
   first night is the first real soak. Ask the user how it went before
   changing anything.
 
+- 2026-11-13 ~22:10: first bedroom attempt: no sound, and there was no way
+  to see why. v0.3.1 adds Bluetooth diagnostics (`[bt]`/`[scan]` lines that
+  say "no answer" vs "refused" vs "stale key"), a restart-surviving RTC event
+  log served over TCP 2323 in the update window (`docs/runbooks/flash.md`),
+  legacy PIN 0000/1234, stale-key cleanup and a 7.68 s page timeout. Back
+  on the bench, the board reported it **already holds a pairing key for the
+  R2000DB**, so it paired downstairs. Leading theory: it connected, and
+  the noise was too quiet (saved volume 40% = -30 dB) to notice. That
+  would also explain the speaker refusing the Pixel 11 (busy).
+
 ## Toolchain — always through the wrappers
 
 - **`./scripts/pio.sh <pio args>`** runs PlatformIO from the repo-local
