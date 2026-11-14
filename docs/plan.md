@@ -76,7 +76,7 @@ Runbook: `docs/runbooks/bring-up.md`.
 3. **Back up the stock firmware** (full 4 MB read) into `backup/`, before
    anything is written to the board.
 4. Flash the `probe` env. Record:
-   - board variant (expected: ES8388 v2);
+   - board variant (result 2026-11-13: ES8388 **v1**, against the schematic's v2);
    - PSRAM size;
    - which keys produce events (press each one in turn);
    - headphone-detect behaviour;
@@ -102,15 +102,12 @@ depend on, and the stock image is safely in `backup/`.
    ceiling clamp, linear fade-in/out over N samples, mute. Tests check fade
    endpoints, monotonic ramps, and that the ceiling is never exceeded even
    mid-fade.
-3. **ES8388 + I2S driver** (on-device). Configure the codec over I2C (v2 pins:
-   SCL 23, SDA 18). Enable DAC → OUT1 and OUT2. Run I2S at 44.1 kHz, 16-bit
-   stereo (MCLK 0, BCLK 5, WS 25, DOUT 26). Leave the speaker amp (GPIO21) off;
+3. **ES8388 + I2S driver** (on-device). Configure the codec over I2C (v1 pins,
+   confirmed: SDA 33, SCL 32). Enable DAC → OUT1 and OUT2. Run I2S at
+   44.1 kHz, 16-bit stereo (v1: MCLK 0, BCLK 27, WS 25, DOUT 26). Leave the speaker amp (GPIO21) off;
    only the headphone jack is used. Listen with headphones at low volume, with
    the user's go-ahead (D8).
-4. Test the KEY4/KEY5-after-codec-init idea (`docs/hardware.md`): configure the
-   codec, release I2C, and read GPIO23/18 as buttons. Confirm audio is
-   undisturbed while those keys are pressed.
-5. A minimal local UI on the safe keys: play/stop, next noise type, volume
+4. A minimal local UI on the safe keys: play/stop, next noise type, volume
    up/down.
 
 **Done when** brown/pink/white play cleanly from the jack, and the volume keys

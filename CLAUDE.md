@@ -98,11 +98,11 @@ regression test.
 
 ## Hardware facts that bite
 
-- **This board is the ES8388 "v2" pin map** (per the module schematic; the
-  probe confirms it). The codec's I2C is on GPIO23/18 and its I2S bit clock
-  on GPIO5. Those are KEY4/KEY5/KEY6. KEY2 (GPIO13) is the SD card's DAT3. With
-  analog output plus the SD card, only KEY1 and KEY3 are free without tricks.
-  The tricks are in `docs/hardware.md`.
+- **This board is the ES8388 "v1" pin map** (confirmed by the probe on
+  2026-11-13). The vendor's schematic shows v2 and is wrong for this board.
+  The codec's I2C is on SDA 33 / SCL 32, and I2S BCLK is on 27. No key
+  shares a pin with the codec. KEY2 (GPIO13) is the SD card's DAT3 line, and
+  the SD card is optional.
 - **Only the original ESP32 can be a Bluetooth audio *source*.** S3/C3/C6 lack
   Bluetooth Classic. Don't "upgrade" the chip.
 - **Wi-Fi + A2DP coexistence is unproven for us.** Espressif says it is

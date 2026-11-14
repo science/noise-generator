@@ -28,8 +28,20 @@ Status markers used below:
 - The MAC addresses are in the boot log and the backup. They are deliberately
   not written here, because this repo is public.
 
-PSRAM size, board variant (v1/v2), keys and DIP switches still need the
-probe firmware.
+## Confirmed on 2026-11-13 (probe firmware)
+
+- **PSRAM: 4096 KB** found and usable **[confirmed]**.
+- **Board variant: ES8388 "v1"** **[confirmed]**. The codec answers at I2C
+  0x10 on **SDA 33 / SCL 32**, and nothing answers on SDA 18 / SCL 23. This
+  **contradicts the vendor's module schematic** (the Amazon image), which
+  shows the v2 wiring. That image is evidently for a different module
+  revision. Trust the probe, not the listing.
+- Bluetooth Classic is compiled into the pinned core and present on the chip
+  **[confirmed]**.
+- The restore path works **[confirmed]**. Writing the factory backup back
+  (`esptool write-flash 0 backup/stock-firmware-2026-11-13.bin`, 8.5 s,
+  hash verified) booted the stock firmware again, before the probe replaced
+  it.
 
 ## What the board is
 
@@ -73,62 +85,41 @@ The user remembered them as 2.5 mm. On this board they are 3.5 mm:
 GPIO12 is also an ESP32 *strapping pin*. The chip reads its level at reset to
 choose the flash voltage. Firmware must only ever read it, never drive it.
 
-## Codec wiring — this board is the "v2" pin map
-
-The module schematic labels the codec's buses like this **[from schematic]**:
-
-- I2C (control): **SCL = GPIO23, SDA = GPIO18**.
-- I2S (audio): **MCLK = GPIO0, BCLK (SCLK) = GPIO5, LRCK (WS) = GPIO25,
-  DSDIN (ESP32 → codec, playback) = GPIO26, ASDOUT (codec → ESP32,
-  recording) = GPIO35**.
+## Codec wiring — this board is the "v1" pin map **[confirmed]**
 
 `arduino-audio-driver` names two ES8388 variants:
 
-- **v1**: I2C on SDA 33 / SCL 32, BCLK on GPIO27.
-- **v2**: I2C on SDA 18 / SCL 23, BCLK on GPIO5.
+- **v1**: I2C on SDA 33 / SCL 32. I2S: MCLK 0, BCLK 27, WS (LRCK) 25,
+  DOUT (ESP32 → codec) 26, DIN (codec → ESP32) 35.
+- **v2**: I2C on SDA 18 / SCL 23, BCLK on GPIO5 (the rest the same).
 
-The schematic matches **v2**. The probe confirms it by scanning both buses for
-the ES8388 at I2C address 0x10 (`firmware/lib/BoardId`). If the probe says v1
-instead, this section is wrong and gets rewritten.
+**This board is v1.** The probe found the ES8388 at 0x10 on SDA 33 / SCL 32
+(`firmware/lib/BoardId`). The vendor's module schematic shows v2 wiring, but
+it does not match this board. The I2C pins are confirmed. The v1 I2S pins
+are still **[from library/community]** until Phase 1 plays audio through
+them.
 
-## Buttons (KEY1–KEY6) and why the variant matters
+## Buttons (KEY1–KEY6) — all six usable **[confirmed]**
 
-The board has six user keys plus RST (reset) and BOOT. The common key map
-**[from library/community]**, with the function names ESP-ADF gives them:
+The board has six user keys plus RST (reset) and BOOT. All six were pressed
+in turn on 2026-11-13. Each logged exactly one PRESSED and one released
+event, with no bounce visible at the probe's 10 ms polling rate. All six
+are active-low: the line reads LOW while the key is held. The silkscreen
+order matches the GPIO map below. The function names in parentheses are
+ESP-ADF's defaults, not ours.
 
-- KEY1 = GPIO36 (Mode). GPIO36 is input-only and needs the board's external
-  pull-up resistor.
-- KEY2 = GPIO13 (Rec). GPIO13 is also the SD card's DAT3 line.
+- KEY1 = GPIO36 (Mode). GPIO36 is input-only and has no internal pull-up; the
+  board's external pull-up works.
+- KEY2 = GPIO13 (Rec). Also the SD card's DAT3 line. It is only an issue if
+  the SD card is used, and the SD card is optional.
 - KEY3 = GPIO19 (Play).
-- KEY4 = GPIO23 (Set). On v2 this is the codec's **I2C SCL**.
-- KEY5 = GPIO18 (Vol−). On v2 this is the codec's **I2C SDA**.
-- KEY6 = GPIO5 (Vol+). On v2 this is the codec's **I2S bit clock**.
+- KEY4 = GPIO23 (Set).
+- KEY5 = GPIO18 (Vol−).
+- KEY6 = GPIO5 (Vol+).
 
-What that means in practice on a v2 board:
-
-- **Safe with no tricks: KEY1 and KEY3.** KEY2 is also safe when the SD card
-  is not in use.
-- **KEY2 alongside the SD card — maybe.** In 1-bit SD mode the ESP32 drives
-  only CLK, CMD and D0. D3 (GPIO13) just has to be pulled high while the card
-  is initialised. Reading GPIO13 as a button afterwards may well work. Phase 0
-  tests it. Until then, the conservative answer (`usableKeys()`) treats KEY2
-  as lost when the SD card is used.
-- **KEY4 and KEY5 (the I2C lines) — likely usable after the codec is set up.**
-  The ES8388 only needs I2C to load its registers. If volume is done digitally
-  (by scaling the samples), the firmware can configure the codec once, release
-  the I2C bus, and read GPIO23/GPIO18 as buttons. A press then looks to the
-  codec like a START/STOP pair with no address byte, or like clock pulses
-  without a START. Both are ignored. To verify in Phase 1.
-- **KEY6 (I2S bit clock) — do not press while analog audio is playing.** The
-  ESP32 actively drives GPIO5 as a clock output. The button shorts it to
-  ground, which glitches the audio and stresses the pin driver.
-- **When output goes over Bluetooth only, the codec is not used at all.** I2C
-  and I2S can then stay unconfigured, and all six keys become plain buttons.
-  This is one more reason the output path (decision D2) shapes the button
-  design.
-
-A sticker or paint dot over any key that must not be pressed is a reasonable
-physical safeguard.
+Because the board is v1, none of these pins is shared with the codec. The
+v2-only concerns from the first draft of this doc (keys doubling as the
+codec's I2C or I2S clock) do not apply.
 
 ## SD card slot
 

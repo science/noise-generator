@@ -69,8 +69,8 @@ items to **[confirmed]**:
 - `chip`, `features` — expect `BT-Classic=yes`.
 - `flash`, `PSRAM` — expect 4 MB / about 8 MB. If PSRAM shows 0, check the
   `-DBOARD_HAS_PSRAM` build flag and the module marking.
-- `I2C v1` / `I2C v2` and `board variant` — the schematic predicts **ES8388
-  v2** (0x10 on SDA18/SCL23).
+- `I2C v1` / `I2C v2` and `board variant` — 2026-11-13 result: **ES8388
+  v1** (0x10 on SDA33/SCL32). The vendor schematic predicted v2, wrongly.
 - `SD card` — see step 4.
 - Press **each key in turn**, KEY1 to KEY6. Note which ones log `PRESSED`. On
   v2 the probe does not watch KEY4–6, because those pins belong to the codec.
@@ -114,6 +114,6 @@ reports `mount FAILED`, work through these in order:
 
 - Update `docs/hardware.md`: board variant, keys, DIP switches, flash/PSRAM,
   MAC, SD result.
-- If the variant is not v2, the codec pins in the Phase 1 plan change.
+- If the variant differs from v1, the codec pins in the Phase 1 plan change.
   Update `docs/plan.md` too.
 - Commit: `docs: record Phase 0 bring-up findings`.
