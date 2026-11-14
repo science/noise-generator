@@ -18,7 +18,7 @@ Public repo `science/noise-generator`, Apache-2.0.
   Phase 6 Pixel retirement). Where the work is and what comes next.
 - **`docs/decisions.md`** — D1–D8: why PlatformIO/Arduino and not ESPHome,
   why Bluetooth output sits behind a Wi-Fi-coexistence spike, why the noise is
-  synthesized, why MQTT, licensing, schedule ownership, toolchain pinning,
+  synthesized, the (deferred) HA-integration question, licensing, schedule ownership, toolchain pinning,
   bedroom safety.
 - **`docs/hardware.md`** — board facts, each marked confirmed /
   from-schematic / from-library. Pin maps, the button-vs-codec pin conflicts,
@@ -29,9 +29,12 @@ Public repo `science/noise-generator`, Apache-2.0.
 ## Status (update as phases land)
 
 - 2026-11-13: repo initialised, research done, toolchain pinned. The `probe`
-  firmware builds and its native tests pass. **The board has not been seen on
-  USB yet.** It was probably plugged into its power-only micro-USB port. Next
-  is Phase 0 (`docs/runbooks/bring-up.md`).
+  firmware builds and its native tests pass.
+- 2026-11-13: the board is on `/dev/ttyUSB0` (CP2102; the first cable was
+  data-dead). ESP32-D0WD-V3 rev 3.1, 4 MB flash. The stock firmware is backed
+  up and verified in `backup/`. Next: flash the probe, with the user's OK.
+  The SD card is optional. The HA integration method (D4) is deferred by the
+  user; do not push MQTT or a web API until it is discussed.
 
 ## Toolchain — always through the wrappers
 
@@ -153,8 +156,8 @@ NVS secrets, so they are gitignored. Treat them as credentials.
 
 ## Related projects
 
-- **`~/dev/home-assistant`** — HA on t480-server (address in that repo). The MQTT
-  broker (Mosquitto) and any HA-side config for this device get added *there*,
+- **`~/dev/home-assistant`** — HA on t480-server (address in that repo). Any
+  HA-side config or service for this device gets added *there*,
   under its own `production` deploy flow. The ESPHome devices there are a
   useful contrast (`esphome/esphome.sh`, a pinned-toolchain wrapper we copied
   the idea from). HA memory `project_pixel3_brown_noise` describes the Pixel 3

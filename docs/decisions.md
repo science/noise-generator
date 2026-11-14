@@ -103,10 +103,22 @@ The firmware keeps the output behind one interface (`AudioSink`: either the
 rewrite. The analog path gets built in Phase 1 regardless, because it is the
 simplest way to hear the generator.
 
-**Also open: the speaker itself** (QUESTIONS.md). Does it have AUX in? Does it
-turn itself off when idle, and can it then be woken over Bluetooth? Is it on a
-smart plug? The answers decide what "noise off" does. Either the ESP32 drops the
-Bluetooth link and the speaker sleeps, or it keeps the link up with silence.
+**The speaker** (user, 2026-11-13): an **Edifier R2000DB** powered bookshelf
+pair. It has Bluetooth and analog inputs, so fallback 1 is available. Its
+analog inputs may be RCA rather than 3.5 mm; check before buying a cable. The
+user prefers Bluetooth. **It stays on as long as a Bluetooth link from the
+source is active**, and the Pixel 3 link has given no connectivity trouble.
+Consequences:
+
+- When noise is "off", the ESP32 should keep the A2DP link connected rather
+  than drop it. Dropping it risks the speaker going into standby, and it may
+  not come back for a Bluetooth reconnect without a button press.
+- Phase 2 must establish whether a connected but *idle* link (the A2DP stream
+  suspended) keeps the speaker awake, or whether it needs a continuous stream
+  of silence. Streaming silence costs radio time all day, so prefer the idle
+  link if it works.
+- Pairing: the Pixel 3 must be unpaired or have Bluetooth off first. Otherwise
+  the speaker may reconnect to it instead.
 
 ## D3 — Sound source: synthesize on the device; SD-card files are an optional later phase
 
@@ -152,7 +164,19 @@ Files loop with a short crossfade so the seam is inaudible.
 we can measure its spectrum and tune the synth's "brown" preset to match. The
 first night on the new device would then sound like the old one.
 
-## D4 — Home Assistant integration: MQTT with HA discovery — needs a broker — OPEN
+## D4 — Home Assistant integration — DEFERRED, to discuss after Phase 0
+
+**Status (2026-11-13): postponed by the user.** Their view is that their
+requirements call for neither a message broker nor a web API. They think the
+MQTT proposal below came from my reading of the requirements, not from the
+requirements themselves. Revisit together once there is working
+communication with the board, starting from what "control from Home
+Assistant" has to cover. Concretely: which of the schedule, on/off, nap,
+noise type and volume must HA be able to see or change, and what can live on
+the device alone? The text below is the original proposal, kept for that
+discussion. It is not a decision.
+
+### Original proposal (2026-11-13): MQTT with HA discovery
 
 Recorded 2026-11-13.
 

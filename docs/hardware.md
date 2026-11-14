@@ -9,8 +9,27 @@ Status markers used below:
   tables, trombik's `esp-adf-component-ai-thinker-esp32-a1s`, or forum posts.
   These disagree across board revisions, so treat them as hypotheses.
 
-As of 2026-11-13 nothing is **[confirmed]** yet: the board did not show up on
-USB at all (see "USB ports" below). Phase 0 (`docs/plan.md`) fills this in.
+## Confirmed on 2026-11-13 (esptool + stock boot log)
+
+- **Chip: ESP32-D0WD-V3, revision v3.1**, dual core, 240 MHz, 40 MHz crystal.
+  esptool lists "Wi-Fi, BT", so the Bluetooth Classic hardware is present
+  **[confirmed]**.
+- **Flash: 4 MB** (JEDEC manufacturer 0x5E, device 0x4016). The flash voltage
+  strap reads 3.3 V **[confirmed]**. So there is no 8 MB escape hatch for
+  the flash budget (`docs/plan.md`, "Known constraint").
+- **USB bridge: Silicon Labs CP2102** (`10c4:ea60`) → `/dev/ttyUSB0`
+  **[confirmed]**. The first micro-USB cable was bad. It gave power but no
+  data, which looked exactly like "plugged into the POWER port".
+- **Stock firmware:** AI-Thinker "B&T" firmware v1.1.0, built 2021-06-08 on
+  ESP-IDF v3.3.2. A single 1 MB factory app partition, no OTA slots.
+  It is backed up as `backup/stock-firmware-2026-11-13.bin` (full 4 MB). That
+  file was checked against the chip's own checksum (`esptool verify-flash`:
+  digest matched), and its SHA-256 is in the `.sha256` file next to it.
+- The MAC addresses are in the boot log and the backup. They are deliberately
+  not written here, because this repo is public.
+
+PSRAM size, board variant (v1/v2), keys and DIP switches still need the
+probe firmware.
 
 ## What the board is
 
@@ -112,6 +131,13 @@ A sticker or paint dot over any key that must not be pressed is a reasonable
 physical safeguard.
 
 ## SD card slot
+
+**Optional for this project** (user, 2026-11-13). Firmware lives in the
+module's own 4 MB flash, and synthesized noise needs no files, so the device
+runs with the slot empty. The card only matters if we later want recorded
+sounds (plan Phase 5). Code cannot run from the SD card, so it does not help
+the flash budget either. Leaving the slot empty also frees KEY2 (GPIO13) and
+removes the GPIO2 strapping-pin nuisance during USB flashing.
 
 - Wiring **[from library/community]**: SDMMC on the ESP32's fixed pins.
   CLK = GPIO14, CMD = GPIO15, D0 = GPIO2, D3 = GPIO13. Use 1-bit mode. 4-bit

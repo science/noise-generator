@@ -81,12 +81,9 @@ Runbook: `docs/runbooks/bring-up.md`.
    - which keys produce events (press each one in turn);
    - headphone-detect behaviour;
    - DIP switch positions.
-5. SD card: see whether the 64 GB card mounts as it is. If not, reformat it as
-   FAT32 (needs the user's go-ahead; it wipes the card). Re-run the probe until
-   it mounts.
-6. Experiment: does KEY2 (GPIO13) still read as a button while the SD card is
-   mounted in 1-bit mode? Add a probe mode for it, then update `usableKeys()`
-   red/green.
+5. ~~SD card~~ — skipped. The SD card is optional (`docs/hardware.md`), and
+   the card reader on bambam never enumerated. Revisit only if Phase 5
+   happens.
 
 **Done when** `docs/hardware.md` has no unverified item that later phases
 depend on, and the stock image is safely in `backup/`.
@@ -143,7 +140,15 @@ them and logs the count).
 **Done when** the D2 decision is closed with soak numbers recorded in
 `docs/decisions.md`.
 
-## Phase 3 — Network: Wi-Fi, NTP, OTA, MQTT + Home Assistant
+## Discussion before Phase 3: how Home Assistant talks to the device
+
+Decision D4 is deferred (user, 2026-11-13). The user does not think a broker
+or a web API is needed. Settle this together once the board is
+communicating, before starting Phase 3. Steps 5 and 6 below assume MQTT and
+will change with that discussion. Wi-Fi, NTP and OTA (steps 1–4) are needed
+either way: OTA updates are a stated goal.
+
+## Phase 3 — Network: Wi-Fi, NTP, OTA, Home Assistant link
 
 1. **Secrets at build time** via `firmware/.env` and a `load_env.py` extra
    script, the same pattern as hot-tub. Keys: Wi-Fi SSIDs (the IoT SSID
@@ -160,11 +165,11 @@ them and logs the count).
    Wi-Fi up), then call `esp_ota_mark_app_valid_cancel_rollback()`. An image
    that crashes or fails its self-test rolls back to the previous one, because
    the bootloader has rollback enabled (D1).
-5. **Mosquitto in the HA stack** — cross-repo work in `~/dev/home-assistant`,
+5. *(If MQTT is chosen.)* **Mosquitto in the HA stack** — cross-repo work in `~/dev/home-assistant`,
    needs the user's go-ahead (D4). Add a `mosquitto` service to
    `docker-compose.yml` with a password file and the HA MQTT integration, then
    deploy through that repo's `production` flow.
-6. **`HaDiscovery`** (TDD, native). Builds the discovery config topics and JSON
+6. *(If MQTT is chosen.)* **`HaDiscovery`** (TDD, native). Builds the discovery config topics and JSON
    for the entities listed in D4. Tests compare against golden JSON fixtures:
    unique_ids are stable, `availability_topic` and device block are present.
    **`HaBridge`** (glue) publishes them retained on every MQTT connect, handles
