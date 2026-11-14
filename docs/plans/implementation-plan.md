@@ -87,7 +87,15 @@ Home Assistant's role is deliberately undecided (see Q6).
   present in the toolchain.)
 - **Flash budget.** Bluetooth audio plus Wi-Fi fill about 85% of the space
   for one firmware image. Our code is small, so it fits, but every addition
-  is checked.
+  is checked. At v0.3.1 the app is 90.9% of its 1.9 MB slot, about 175 KB
+  free. That is fine for the planned phone-home (plain HTTP to HA on the
+  LAN). Levers if a later feature does not fit, cheapest first:
+  - lower `CORE_DEBUG_LEVEL` from 3 to 1, which drops the library's log strings;
+  - a custom partition table that folds the unused 128 KB `spiffs`
+    partition into the two app slots. This needs one USB flash; a partition
+    table cannot change over the air;
+  - avoid HTTPS/TLS in the phone-home.
+  An SD card does not help: code runs only from the internal flash.
 - **Bedroom safety.** It boots silent and always fades in. Volume has a
   ceiling. No lights at night. Every flash or sound test needs your OK.
 

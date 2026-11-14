@@ -137,6 +137,14 @@ codec's I2C or I2S clock) do not apply.
 
 ## SD card slot
 
+**Not installed, by decision** (2026-11-13). The user cleared the old phone's
+64 GB card (its photos are backed up) and offered it for log storage. We
+declined. The firmware does not need the space: code cannot live on the card,
+and the event log fits in RTC memory. The card would also bring back the KEY2
+(GPIO13) and GPIO2 strapping-pin conflicts below. If longer logs are ever
+needed, the unused 128 KB `spiffs` partition in internal flash, or a
+phone-home to HA, comes first.
+
 **Optional for this project** (user, 2026-11-13). Firmware lives in the
 module's own 4 MB flash, and synthesized noise needs no files, so the device
 runs with the slot empty. The card only matters if we later want recorded

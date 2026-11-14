@@ -64,9 +64,16 @@ Public repo `science/noise-generator`, Apache-2.0.
   log served over TCP 2323 in the update window (`docs/runbooks/flash.md`),
   legacy PIN 0000/1234, stale-key cleanup and a 7.68 s page timeout. Back
   on the bench, the board reported it **already holds a pairing key for the
-  R2000DB**, so it paired downstairs. Leading theory: it connected, and
-  the noise was too quiet (saved volume 40% = -30 dB) to notice. That
-  would also explain the speaker refusing the Pixel 11 (busy).
+  R2000DB**, so it paired downstairs.
+- 2026-11-13 ~22:20: **LIVE in the bedroom on v0.3.1, confirmed by the user.**
+  The first attempt had in fact connected. The noise was just inaudible: the
+  saved volume of 40% (-30 dB) was too quiet at the R2000DB's knob setting.
+  The user raised it with KEY6. "Struggled to see the speaker advertise" and
+  the Pixel 11's "couldn't communicate" were both the speaker being busy with
+  the board (it takes one audio connection at a time). No log was pulled. The
+  remote-log path is bench-verified only. Still unverified on-device: the
+  09:00 fade-out, the 15:00 quiet restart and the KEY1 lockout. Ask how the
+  night went before changing anything.
 
 ## Toolchain — always through the wrappers
 
@@ -117,7 +124,10 @@ regression test.
   `libcheck` (compile-only link test of the shipping libraries and the flash
   budget; never flash it) and `native` (host tests). Phases add `app` and
   `app_ota`.
-- **Flash budget is tight.** A2DP + Wi-Fi + MQTT alone use 85% of a 1.9 MB
+- **Flash budget:** the app is 90.9% of a 1.9 MB OTA slot at v0.3.1, which
+  leaves about 175 KB. Levers if it runs out are in the plan's flash-budget
+  note. An SD card does not help: code runs only from internal flash.
+- (History) A2DP + Wi-Fi + MQTT alone use 85% of a 1.9 MB
   OTA slot (`docs/plans/implementation-plan.md`, "Known constraint"). Check the `Flash:` line after
   adding code or libraries. The platform and
   libraries are pinned to exact versions. Partition table is `min_spiffs.csv`

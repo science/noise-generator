@@ -48,7 +48,7 @@ escape hatch is pioarduino's hybrid `framework = arduino, espidf` mode. It
 rebuilds the core from source with our own `sdkconfig`, so the code stays the
 same.
 
-## D2 — Audio output path: Bluetooth A2DP source first, behind a go/no-go spike — OPEN
+## D2 — Audio output path: Bluetooth A2DP source first, behind a go/no-go spike — DECIDED (Bluetooth; Wi-Fi only when not streaming)
 
 Recorded 2026-11-13.
 
@@ -132,6 +132,31 @@ Consequences:
   link if it works.
 - Pairing: the Pixel 3 must be unpaired or have Bluetooth off first. Otherwise
   the speaker may reconnect to it instead.
+
+**Outcome (2026-11-13, live in the bedroom).**
+
+- **The coexistence question was settled by memory, not radio.** With
+  Wi-Fi and A2DP both up, free heap measured 37 KB (minimum 17 KB), too close
+  to a crash. So the two never run together. Wi-Fi comes up at boot (clock,
+  optional update window), during a quiet restart at 15:00, and when KEY4 is
+  held. Bluetooth runs the rest of the time. The overnight coexistence soak
+  was not needed.
+- **Pairing with the R2000DB needed no special procedure.** With the Pixel 3
+  powered off, the board paired by itself after a speaker power-cycle. It
+  pages the stored address forever, with no fallback to scanning.
+- **The speaker takes one audio connection at a time.** While the board holds
+  it, the speaker stops advertising and refuses other phones ("couldn't
+  communicate" on a Pixel 11). That looked like a failure, but it was
+  success.
+- **Level.** The R2000DB's knob was set for the Pixel's louder stream. The
+  board's saved volume of 40% (-30 dB on our curve) was inaudible there, and
+  the user raised it with KEY6. If the speaker is ever re-set up: start
+  around 70% and adjust with the knob.
+- **Library defaults we override** (v0.3.0): the legacy PIN rotates
+  0000/1234 (the library's default is 1234 only; Edifier documents 0000); our
+  pairing key is deleted only on "key missing"; the page timeout is 7.68 s.
+  Every connect outcome is logged to a restart-surviving log
+  (`docs/runbooks/flash.md`, "Reading the event log remotely").
 
 ## D3 — Sound source: synthesize on the device; SD-card files are an optional later phase
 
